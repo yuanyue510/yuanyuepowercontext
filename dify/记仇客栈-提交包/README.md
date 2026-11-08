@@ -140,6 +140,8 @@ curl -X POST http://127.0.0.1/console/api/workspaces/current/plugin/install/pkg 
 | Max tokens | 8192 |
 
 > DSL 里 LLM 节点写死的是 `provider: langgenius/openai_api_compatible/openai_api_compatible` + `name: deepseek-flash`，只要这里同名同 provider 就能对上。换模型时两边一起改。
+>
+> **本作品未使用 Embedding / Rerank 服务**。`lore` 设定检索与账本查询均为 seekdb 的关键词匹配 + 结构化过滤（SQL `LIKE` / `WHERE`），不涉及向量库；Dify 侧也未配置任何知识库（DSL 导入后无需重新绑定知识库）。
 
 ### 4.5 导入 DSL 并发布
 
