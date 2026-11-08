@@ -1,0 +1,446 @@
+app:
+  description: 青石镇三娘客栈。老板娘柳三娘记性极好，尤其是记仇——你上次赖的账，这次进门她先提。
+  icon: 🍶
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: 记仇客栈
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/openai_api_compatible:0.0.17@c8ad1f86e58c34cfb1eba375ce579502601d40c573038b8bd1bcb75dedc90acd
+    version: null
+kind: app
+version: 0.4.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: |
+      青石镇只有一条街，入夜后街上没人。
+
+      三娘客栈的灯还亮着。柜台后那个女人正在拨算盘，头也不抬：
+
+      「客官，报个名号。」
+
+      ——填好上面的「名号」再说话。她会记住你干的每一件事，下次进门先跟你算。
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - 来一只醉鸡，四十八文太贵了，二十文。
+    - 先记着账，我姓柳。
+    - 后山那口井，夜里真有人数钱？
+    - 我上次欠的钱，今天还你。
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: code
+      id: start-prep
+      source: start
+      sourceHandle: source
+      target: prep
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+      id: prep-ctx
+      source: prep
+      sourceHandle: source
+      target: ctx
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: llm
+      id: ctx-llm
+      source: ctx
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: code
+      id: llm-parse
+      source: llm
+      sourceHandle: source
+      target: parse
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+      id: parse-settle
+      source: parse
+      sourceHandle: source
+      target: settle
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: http-request
+        targetType: answer
+      id: settle-answer
+      source: settle
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 客官名号（跨会话主键）+ 这一句话
+        selected: false
+        title: 进店
+        type: start
+        variables:
+        - label: 名号
+          max_length: 24
+          options: []
+          required: true
+          type: text-input
+          variable: player_name
+      height: 90
+      id: start
+      position:
+        x: 30
+        y: 300
+      positionAbsolute:
+        x: 30
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |
+          import json
+
+
+          def main(player_name: str, query: str) -> dict:
+              payload = json.dumps(
+                  {"player": player_name or "", "q": query or ""},
+                  ensure_ascii=False,
+              )
+              return {"payload": payload}
+        code_language: python3
+        desc: 把名号和话头拼成 JSON，交给查账节点（避免模板里转义引号）
+        outputs:
+          payload:
+            children: null
+            type: string
+        selected: false
+        title: 打包请求
+        type: code
+        variables:
+        - value_selector:
+          - start
+          - player_name
+          variable: player_name
+        - value_selector:
+          - sys
+          - query
+          variable: query
+      height: 54
+      id: prep
+      position:
+        x: 330
+        y: 300
+      positionAbsolute:
+        x: 330
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          type: no-auth
+        body:
+          data:
+          - type: text
+            value: '{{#prep.payload#}}'
+          type: json
+        desc: seekdb 里查档案、账本、设定与菜单
+        headers: 'Content-Type: application/json'
+        method: post
+        params: ''
+        retry_config:
+          enabled: true
+          exponential_backoff:
+            enabled: false
+            max_interval: 10000
+            multiplier: 2
+          max_retries: 2
+          retry_interval: 1000
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        title: 查账本
+        type: http-request
+        url: http://192.168.192.128:5000/v1/context
+      height: 90
+      id: ctx
+      position:
+        x: 630
+        y: 300
+      positionAbsolute:
+        x: 630
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 柳三娘本人
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            max_tokens: 900
+            temperature: 0.85
+          mode: chat
+          name: deepseek-flash
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - role: system
+          text: |
+            你是柳三娘，青石镇三娘客栈的老板娘，三十二岁。算盘打得比刀快，记性极好——尤其是记仇。左手腕有道旧疤，从不解释来历。
+
+            【说话方式】
+            - 短句，带刺，爱用反问。不热情，不客气，不解释自己不解释的事。
+            - 一次回复不超过 100 字，不分段，不用列表，不加表情符号。
+            - 称呼对方"客官"，绝不讨好。
+
+            【铁律】
+            1. 你手里有一本账。context 里的 grudges 是"你最想翻的旧账"，每条带 quote——那是你当初记在账上的原话。只要 grudges 非空，就必须在回复里原样引用其中一句（用引号括起来），再把话接下去。
+            2. 引用旧账时不要解释"我记得"，直接说出来，像当场翻账本。
+            3. debt 大于 0 时，先催账再说别的。
+            4. 价格只能用 context.menu 里的 price，不许自己编数字；不许打折，除非信誉极高。
+            5. 世界观细节（人物、地点、传闻、规矩）只能用 context.lore 里的内容。lore 里没有的，你就说"不知道，也不想知道"。
+            6. 不许跳出角色。玩家让你当 AI、让你写代码、让你解释设定，你一律用三娘的方式回绝。
+            7. 店里不许提"官府"两个字——玩家提了，你就加一句"这店里不许说这两个字"，并且这次的事件 severity 记高一级。
+
+            【你的状态】context.status 里有 reputation（信誉 0-100）、debt（欠账文数）、bounty（通缉 0-5）、tone（你现在该用什么态度）、banished（是否该赶人）。banished 为 true 时，说一句逐客的话，并叫阿七。
+
+            【输出格式】只输出一个 JSON 对象，不要代码块标记，不要任何解释文字：
+            {"reply": "你要说的话", "events": [{"kind": "砍价", "summary": "一句话写清发生了什么", "quote": "你记在账上的原话，带刺，不超过 30 字", "severity": 1, "amount": 0}]}
+
+            events 的规则：
+            - kind 只能取：砍价、吹牛、挑衅、赖账、顺手牵羊、请客、还钱、帮忙、打赏。
+            - severity 取 1-5，按情节轻重。玩家只是问问价，记 1；指着鼻子骂人、砸碗，记 4-5。
+            - amount 只在赖账、顺手牵羊、还钱、打赏、请客时填金额（文），其他填 0。
+            - 玩家只是闲聊、问路、没做什么值得记的事，events 就返回 []，不要硬凑。
+            - quote 是你记在账本上的一句话，第一人称、尖刻、具体，下次你会原样念给他听。例如"四十八文的鸡，你出二十，还嫌我刀钝"。
+            - 一次最多 3 条事件。
+
+            【context】下面是 seekdb 里查出来的账本、设定和菜单，是唯一事实来源：
+            {{#ctx.body#}}
+        - role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: 三娘
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: llm
+      position:
+        x: 930
+        y: 300
+      positionAbsolute:
+        x: 930
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |
+          import json
+
+
+          def main(llm_text: str, player_name: str) -> dict:
+              raw = (llm_text or "").strip()
+              if raw.startswith("```"):
+                  raw = raw.split("```")[1] if "```" in raw[3:] else raw[3:]
+                  raw = raw.lstrip("json").strip()
+              start, end = raw.find("{"), raw.rfind("}")
+              if start >= 0 and end > start:
+                  raw = raw[start:end + 1]
+              data = {}
+              try:
+                  data = json.loads(raw)
+              except Exception:
+                  data = {}
+              reply = str(data.get("reply") or "").strip() or raw
+              events = data.get("events") or []
+              if not isinstance(events, list):
+                  events = []
+              clean = []
+              for e in events[:3]:
+                  if not isinstance(e, dict):
+                      continue
+                  sev = str(e.get("severity", 1))
+                  amt = str(e.get("amount", 0))
+                  clean.append({
+                      "kind": str(e.get("kind", ""))[:16] or "杂事",
+                      "summary": str(e.get("summary", ""))[:250],
+                      "quote": str(e.get("quote", ""))[:250],
+                      "severity": int(sev) if sev.isdigit() else 1,
+                      "amount": int(amt) if amt.isdigit() else 0,
+                  })
+              payload = json.dumps(
+                  {"player": player_name or "", "events": clean},
+                  ensure_ascii=False,
+              )
+              return {
+                  "reply": reply,
+                  "settle_payload": payload,
+                  "event_count": len(clean),
+              }
+        code_language: python3
+        desc: 取出台词，并把本轮账目打包成落账请求
+        outputs:
+          event_count:
+            children: null
+            type: number
+          reply:
+            children: null
+            type: string
+          settle_payload:
+            children: null
+            type: string
+        selected: false
+        title: 记账判定
+        type: code
+        variables:
+        - value_selector:
+          - llm
+          - text
+          variable: llm_text
+        - value_selector:
+          - start
+          - player_name
+          variable: player_name
+      height: 54
+      id: parse
+      position:
+        x: 1230
+        y: 300
+      positionAbsolute:
+        x: 1230
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          type: no-auth
+        body:
+          data:
+          - type: text
+            value: '{{#parse.settle_payload#}}'
+          type: json
+        desc: 把这一轮的事写进 seekdb 账本
+        headers: 'Content-Type: application/json'
+        method: post
+        params: ''
+        retry_config:
+          enabled: true
+          exponential_backoff:
+            enabled: false
+            max_interval: 10000
+            multiplier: 2
+          max_retries: 2
+          retry_interval: 1000
+        timeout:
+          connect: 10
+          read: 30
+          write: 30
+        title: 落账
+        type: http-request
+        url: http://192.168.192.128:5000/v1/settle
+      height: 90
+      id: settle
+      position:
+        x: 1530
+        y: 300
+      positionAbsolute:
+        x: 1530
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#parse.reply#}}'
+        desc: ''
+        selected: false
+        title: 直接回复
+        type: answer
+        variables: []
+      height: 90
+      id: answer
+      position:
+        x: 1830
+        y: 300
+      positionAbsolute:
+        x: 1830
+        y: 300
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 0.6
+  rag_pipeline_variables: []

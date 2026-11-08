@@ -1,0 +1,7 @@
+player	reputation	debt	bounty	visits	last_seen
+张三	29	28	0	1	2026-11-08 10:47:43
+王五	41	0	0	1	2026-11-06 11:12:54
+id	player	kind	severity	amount	quote
+3	王五	砍价	3	0	四十八文的鸡，你出二十，还嫌我刀钝
+8	张三	砍价	3	0	四十八文的鸡，你出二十，还嫌我刀钝。
+9	张三	赖账	4	28	先记着？我姓柳——你姓柳？
