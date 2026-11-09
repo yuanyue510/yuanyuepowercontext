@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>端侧书房 · 浏览器本地向量化 + seekdb 混合检索</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">◧</div>
+    <div>
+      <h1>端侧书房</h1>
+      <p>浏览器本地向量化 · seekdb 向量 + 全文混合检索</p>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge" id="badgeBackend" title="推理后端">后端检测中…</span>
+    <span class="badge" id="badgeModel" title="模型">bge-small-zh-v1.5</span>
+    <span class="badge" id="badgeSeekdb" title="seekdb 连接状态">seekdb 连接中…</span>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- 左：知识库与导入 -->
+  <aside class="col left">
+    <section class="card">
+      <div class="card-head">
+        <h2>知识库</h2>
+        <button class="icon-btn" id="btnNewKb" title="新建知识库">+</button>
+      </div>
+      <div id="kbList" class="kb-list"></div>
+      <div class="kb-actions">
+        <button class="btn ghost small" id="btnRefreshList">刷新列表</button>
+        <button class="btn ghost small danger" id="btnDropKb">删除当前</button>
+      </div>
+    </section>
+
+    <section class="card grow">
+      <div class="card-head"><h2>导入语料</h2><span class="hint" id="chunkHint">320 字 / 重叠 60</span></div>
+      <div id="dropzone" class="dropzone">
+        <p><strong>拖入 .txt / .md 文件</strong></p>
+        <p class="dim">或 <button class="link" id="btnPick">选择文件</button> · 也可粘贴文本</p>
+        <input type="file" id="fileInput" multiple accept=".txt,.md,.markdown,.csv,text/plain" hidden />
+      </div>
+      <textarea id="pasteBox" class="paste" rows="3" placeholder="粘贴一段文本，Ctrl+Enter 直接导入…"></textarea>
+      <div class="row">
+        <label>批大小 <select id="selBatch"><option>4</option><option selected>16</option><option>32</option><option>64</option></select></label>
+        <label>切片 <select id="selChunk"><option>220</option><option selected>320</option><option>500</option></select></label>
+        <button class="btn primary" id="btnIngest">导入并建索引</button>
+      </div>
+      <div class="progress-wrap" id="ingestProgress" hidden>
+        <div class="progress"><div class="bar" id="ingestBar"></div></div>
+        <div class="progress-meta"><span id="ingestStage">准备中</span><span id="ingestStat"></span></div>
+      </div>
+      <div class="import-log" id="importLog"></div>
+    </section>
+  </aside>
+
+  <!-- 中：检索 -->
+  <section class="col mid">
+    <section class="card search-card">
+      <div class="search-row">
+        <input id="q" class="search-input" placeholder="问点什么，例如：退款要几天到账？" autocomplete="off" />
+        <button class="btn primary" id="btnSearch">检索</button>
+      </div>
+      <div class="row wrap">
+        <div class="seg" id="modeSeg">
+          <button data-mode="hybrid" class="on">混合 RRF</button>
+          <button data-mode="vector">仅向量</button>
+          <button data-mode="fulltext">仅全文</button>
+        </div>
+        <label>TopK <select id="selK"><option>3</option><option selected>5</option><option>10</option></select></label>
+        <span class="hint" id="searchMeta"></span>
+      </div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="card grow results-card">
+      <div class="card-head"><h2>检索结果</h2><span class="hint" id="resultMeta"></span></div>
+      <div id="results" class="results">
+        <div class="empty">
+          <div class="empty-icon">⌕</div>
+          <p>导入几篇文档后，输入问题即可检索。</p>
+          <p class="dim">文档在本机完成向量化，向量与原文写入 seekdb，检索由 seekdb 的 DBMS_HYBRID_SEARCH 完成。</p>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- 右：诊断 / 评测 -->
+  <aside class="col right">
+    <section class="card">
+      <div class="tabs" id="tabs">
+        <button data-tab="diag" class="on">诊断</button>
+        <button data-tab="data">数据</button>
+        <button data-tab="eval">评测</button>
+        <button data-tab="log">日志</button>
+      </div>
+
+      <div class="tab-body" data-panel="diag">
+        <dl class="kv" id="diagKv"></dl>
+        <h3>分阶段耗时（最近一次）</h3>
+        <table class="mini" id="timingTable"><tbody></tbody></table>
+        <h3>模型体积与量化</h3>
+        <table class="mini" id="sizeTable"><tbody><tr><td class="dim">加载后自动测量…</td></tr></tbody></table>
+      </div>
+
+      <div class="tab-body" data-panel="data" hidden>
+        <div class="card-head tight"><h3>当前集合</h3><button class="icon-btn" id="btnPeek" title="查看写入内容">↻</button></div>
+        <dl class="kv" id="dataKv"></dl>
+        <div id="peekList" class="peek"></div>
+      </div>
+
+      <div class="tab-body" data-panel="eval" hidden>
+        <p class="dim small">在同一评测集上比较 FP32 / FP16 / INT8 的检索质量与延迟。评测在浏览器内完成向量化，结果由 seekdb 返回。</p>
+        <button class="btn primary block" id="btnEval">开始评测（约 1–2 分钟）</button>
+        <div id="evalOut" class="eval-out"></div>
+      </div>
+
+      <div class="tab-body" data-panel="log" hidden>
+        <div class="log" id="log"></div>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

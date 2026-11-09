@@ -1,0 +1,64 @@
+{
+ "webgpu": {
+  "backend": {
+   "device": "webgpu",
+   "dtype": "fp16",
+   "reason": "WebGPU + shader-f16"
+  },
+  "embed": {
+   "1": {
+    "ms": 1829,
+    "throughput": 35
+   },
+   "8": {
+    "ms": 538,
+    "throughput": 118.9
+   },
+   "16": {
+    "ms": 478,
+    "throughput": 133.8
+   },
+   "32": {
+    "ms": 467,
+    "throughput": 137
+   }
+  },
+  "queryP50": 75.1,
+  "queryP95": 108.7,
+  "searchP50": 58.6,
+  "searchP95": 133.9,
+  "repeats": 3,
+  "searchCount": 22
+ },
+ "wasm": {
+  "backend": {
+   "device": "wasm",
+   "dtype": "q8",
+   "reason": "URL 参数 forceWasm=1 强制降级"
+  },
+  "embed": {
+   "1": {
+    "ms": 4883,
+    "throughput": 13.1
+   },
+   "8": {
+    "ms": 9494,
+    "throughput": 6.7
+   },
+   "16": {
+    "ms": 11034,
+    "throughput": 5.8
+   },
+   "32": {
+    "ms": 1119,
+    "throughput": 57.2
+   }
+  },
+  "queryP50": 21.1,
+  "queryP95": 79.1,
+  "searchP50": 32.2,
+  "searchP95": 45.4,
+  "repeats": 3,
+  "searchCount": 22
+ }
+}

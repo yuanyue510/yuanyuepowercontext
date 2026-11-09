@@ -1,0 +1,15 @@
+# seekdb 服务端（官方镜像）。应用默认连接 127.0.0.1:2881，账号 root / 空密码。
+# 数据持久化到 ./seekdb-data（Windows 下请改用 named volume，见 README）。
+services:
+  seekdb:
+    image: oceanbase/seekdb:latest
+    container_name: seekdb
+    ports:
+      - "2881:2881"   # MySQL 协议 / seekdb-js 连接端口
+      - "2886:2886"   # Web 控制台
+    environment:
+      - MEMORY_LIMIT=2G
+      - DATAFILE_SIZE=2G
+    volumes:
+      - ./seekdb-data:/var/lib/oceanbase
+    restart: unless-stopped

@@ -1,0 +1,38 @@
+{
+ "ts": "2026-11-09T10:20:30",
+ "results": [
+  {
+   "label": "FP32 + WASM",
+   "key": "fp32",
+   "loadMs": 963,
+   "docThroughput": 4.8,
+   "recall5": 0.9333,
+   "ndcg10": 0.936,
+   "mrr": 0.927,
+   "p50": 52,
+   "sizeMB": 90.5
+  },
+  {
+   "label": "INT8 + WASM",
+   "key": "q8",
+   "loadMs": 105,
+   "docThroughput": 58.5,
+   "recall5": 0.9333,
+   "ndcg10": 0.936,
+   "mrr": 0.927,
+   "p50": 60,
+   "sizeMB": 22.9
+  },
+  {
+   "label": "FP16 + WebGPU",
+   "key": "fp16",
+   "loadMs": 195,
+   "docThroughput": 48.3,
+   "recall5": 0.9333,
+   "ndcg10": 0.936,
+   "mrr": 0.927,
+   "p50": 25,
+   "sizeMB": 45.3
+  }
+ ]
+}
