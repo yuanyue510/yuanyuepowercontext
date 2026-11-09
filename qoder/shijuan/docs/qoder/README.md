@@ -3,6 +3,7 @@
 把每个阶段的证据放在这里，文件名与 `QODER_DEVLOG.md` §1 的表格对应：
 
 ```
+00-account-uid.png 账号资料页：阿里云账号 ID（= Qoder UID），已裁掉 IP 与会话信息
 01-plan.png        需求拆解：功能清单与数据模型
 02-scaffold.png    脚手架：目录与依赖
 03-db.png          seekdb 连接与表结构
