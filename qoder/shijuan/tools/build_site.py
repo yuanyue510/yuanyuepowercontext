@@ -15,7 +15,7 @@ REPO = os.environ.get(
     "REPO_URL",
     "https://github.com/yuanyue510/yuanyuepowercontext/tree/2026-competition-ecosystem/qoder/shijuan",
 )
-UID = os.environ.get("QODER_UID", "待填写：Qoder 账号 UID")
+UID = os.environ.get("QODER_UID", "1940117489165517")
 
 REPO_LINE = (
     f'<a href="{REPO}" target="_blank" rel="noopener">{REPO}</a>'

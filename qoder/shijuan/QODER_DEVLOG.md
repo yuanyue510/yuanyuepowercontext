@@ -17,10 +17,10 @@
 
 | 字段 | 值 |
 |---|---|
-| Qoder 账号 UID | `待填写` |
+| Qoder 账号 UID | `1940117489165517`（阿里云账号 ID，Qoder 以阿里云账号登录） |
 | Qoder Sites 网址 | `待填写`（发布后形如 `https://xxx.qoder.site`） |
-| 代码仓库 | `待填写` |
-| 开发起止时间 | `待填写` |
+| 代码仓库 | `https://github.com/yuanyue510/yuanyuepowercontext/tree/2026-competition-ecosystem/qoder/shijuan` |
+| 开发起止时间 | `2026-11-09`（Qoder 会话完成后按实际日期订正，形如 `2026-11-09 ~ 2026-11-12`） |
 
 ---
 
