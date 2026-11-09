@@ -10,8 +10,8 @@
 | 项 | 说明 |
 |---|---|
 | 安装 Qoder | 桌面端 / IDE 插件 / JetBrains / CLI 任选，登录**个人账号**（企业版无法把 Sites 设为「任何人都可访问」） |
-| 拿到 UID | Qoder 账号设置页可以看到 UID；填到下表和第 5 节 |
-| 建仓库 | 本项目推到一个**新的公开仓库**（不要和 Dify / StepFun 赛题的仓库混在一起，避免根 README 冲突） |
+| 拿到 UID | 已核对：Qoder CN 账号资料页「阿里云账号 ID」= `1940117489165517`，见第 0 节下方 |
+| 仓库 | 已就位：`yuanyuepowercontext` 仓库 `2026-competition-ecosystem` 分支 `qoder/shijuan/`（与 Dify、StepFun 赛道同仓不同目录，互不覆盖） |
 
 填这张表（提交时要发给平台）：
 
@@ -172,10 +172,11 @@ search 必须调用 col.hybridSearch()，RRF 交给 seekdb 的 DBMS_HYBRID_SEARC
 1. 在 Qoder 里打开本项目，用 Sites 创建站点，根目录指向 `site/`（`site/index.html` 是单文件，图片已内联，不依赖外部资源）；
 2. 可见范围选 **「任何人都可访问」**（企业版账号无法设置，必须个人账号）；
 3. 发布后用**无痕窗口**打开一次，确认未登录也能看到内容；
-4. 把网址填回本文档第 0 节的表格，并把网站里的 `{{UID}}` 换成真实 UID 后重新生成：
+4. 把网址填回本文档第 0 节的表格，然后重新打包提交包（站点内容不再需要改，UID 与仓库地址已内置）：
 
 ```bash
-QODER_UID="你的UID" REPO_URL="你的仓库地址" python tools/build_site.py
+cd qoder-shijuan && python tools/build_site.py      # 仅在改过 template.html 或截图后才需要
+zip -rq -X ../qoder-shijuan-提交包.zip . -x "node_modules/*" ".git/*" ".env" "*.log"
 ```
 
 > 注意：站点是纯静态展示页。本项目需要 Node 服务 + seekdb 才能跑，所以网站上写清「在线体验需本地启动」，不要放一个点不动的「立即体验」按钮——评审点开会扣分。
