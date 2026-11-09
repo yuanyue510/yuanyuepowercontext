@@ -11,7 +11,10 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS = os.path.join(ROOT, "evidence", "shots")
 OUT = os.path.join(ROOT, "site", "index.html")
-REPO = os.environ.get("REPO_URL", "https://github.com/yuanyue510/shijuan")
+REPO = os.environ.get(
+    "REPO_URL",
+    "https://github.com/yuanyue510/yuanyuepowercontext/tree/2026-competition-ecosystem/qoder/shijuan",
+)
 UID = os.environ.get("QODER_UID", "待填写：Qoder 账号 UID")
 
 REPO_LINE = (
