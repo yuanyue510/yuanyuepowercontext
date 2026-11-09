@@ -1,0 +1,20 @@
+# 记仇客栈 · 桥接服务
+# 用 host 网络：seekdb 监听 127.0.0.1:2881，Dify 容器通过 http://<虚拟机IP>:5000 访问本服务
+services:
+  tavern-bridge:
+    build: .
+    image: tavern-bridge:1.0
+    container_name: tavern-bridge
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      SEEKDB_HOST: 127.0.0.1
+      SEEKDB_PORT: "2881"
+      SEEKDB_USER: root
+      SEEKDB_PASSWORD: ""
+      SEEKDB_DATABASE: tavern
+      # 不使用 PowerContext 时留空即可，服务自动降级为纯 seekdb
+      POWERCONTEXT_URL: ""
+      POWERCONTEXT_SCOPE: ""
+      POWERCONTEXT_TOKEN: ""
+      PORT: "5000"

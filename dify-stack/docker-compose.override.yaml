@@ -1,0 +1,14 @@
+# CentOS 7（内核 3.10）适配：docker-ce 26 默认 seccomp 白名单会拦截
+# postgres initdb / squid 启动所需的系统调用，表现为
+#   FATAL: could not write to file "pg_wal/xlogtemp.XX": Operation not permitted
+# 或 ssrf_proxy 反复重启。对这三个容器关闭 seccomp 过滤即可。
+services:
+  db:
+    security_opt:
+      - seccomp:unconfined
+  sandbox:
+    security_opt:
+      - seccomp:unconfined
+  ssrf_proxy:
+    security_opt:
+      - seccomp:unconfined

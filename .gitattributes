@@ -1,0 +1,7 @@
+# 统一按 LF 入库：bridge/ 与 verification/ 的脚本最终跑在 Linux 容器里
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.zip binary
+*.difypkg binary
