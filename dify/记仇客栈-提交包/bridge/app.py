@@ -148,7 +148,7 @@ def tone_of(rep: int, bounty: int) -> str:
 
 
 def price_of(base: int, rep: int) -> int:
-    """信誉越低，价格越贵：50 分按原价，0 分 2.5 倍，100 分 7.5 折。"""
+    """信誉越低，价格越贵：50 分按原价，0 分 1.75 倍，100 分 2.5 折（0.25 倍）。"""
     factor = 1 + (50 - rep) / 100 * 1.5
     return max(1, int(round(base * factor)))
 

@@ -264,6 +264,8 @@ workflow:
 
             【你的状态】context.status 里有 reputation（信誉 0-100）、debt（欠账文数）、bounty（通缉 0-5）、tone（你现在该用什么态度）、banished（是否该赶人）。banished 为 true 时，说一句逐客的话，并叫阿七。
 
+            context.first_visit 为 true 时，这是你头一回见这位客官：只冷冷报最贵的一道菜和它的价格，不介绍招牌，不寒暄，等他先开口。
+
             【输出格式】只输出一个 JSON 对象，不要代码块标记，不要任何解释文字：
             {"reply": "你要说的话", "events": [{"kind": "砍价", "summary": "一句话写清发生了什么", "quote": "你记在账上的原话，带刺，不超过 30 字", "severity": 1, "amount": 0}]}
 
