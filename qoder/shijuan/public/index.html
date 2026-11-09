@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>拾卷 · 学习资料检索与记忆助手</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo">拾</div>
+    <div>
+      <h1>拾卷</h1>
+      <p>把散落的资料收进 seekdb，让它记住你没读懂的地方</p>
+    </div>
+  </div>
+  <div class="pills" id="status">
+    <span class="pill" id="pill-db">seekdb 连接中…</span>
+    <span class="pill" id="pill-docs">0 片段</span>
+    <span class="pill" id="pill-mem">0 条记忆</span>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="side">
+    <div class="side-head">
+      <span>资料集</span>
+      <button class="ghost" id="btn-new-col">＋ 新建</button>
+    </div>
+    <ul class="col-list" id="col-list"></ul>
+    <div class="side-foot">
+      <label class="learner">
+        学习者
+        <input id="learner" value="demo" spellcheck="false" />
+      </label>
+      <p class="hint">记忆按学习者保存，换浏览器、换会话都还在</p>
+    </div>
+  </aside>
+
+  <section class="main">
+    <nav class="tabs">
+      <button class="tab active" data-tab="ask">提问</button>
+      <button class="tab" data-tab="docs">资料</button>
+      <button class="tab" data-tab="memory">复习</button>
+      <span class="spacer"></span>
+      <span class="mode-hint" id="mode-hint"></span>
+    </nav>
+
+    <!-- 提问 -->
+    <div class="panel active" id="panel-ask">
+      <form class="askbar" id="ask-form">
+        <input id="q" placeholder="问点什么，比如「缺页中断的处理流程是什么」" autocomplete="off" />
+        <select id="mode">
+          <option value="hybrid">混合检索</option>
+          <option value="vector">仅向量</option>
+          <option value="fulltext">仅全文</option>
+        </select>
+        <select id="topk">
+          <option value="5">Top 5</option>
+          <option value="8" selected>Top 8</option>
+          <option value="12">Top 12</option>
+        </select>
+        <button class="primary" type="submit">检索</button>
+      </form>
+      <div class="examples" id="examples">
+        <button class="chip">缺页中断的处理流程是什么</button>
+        <button class="chip">TCP 为什么要三次握手</button>
+        <button class="chip">B+ 树为什么适合范围查询</button>
+        <button class="chip">早停为什么能防止过拟合</button>
+      </div>
+
+      <div id="answer-box" class="answer hidden">
+        <div class="answer-head">
+          <span class="tag" id="ans-tag">已覆盖</span>
+          <span class="meta" id="ans-meta"></span>
+        </div>
+        <div class="answer-body" id="ans-body"></div>
+        <div class="answer-actions">
+          <button class="ghost" id="btn-mark-weak">没懂，记下来</button>
+          <span class="hint">没读懂的问题会进入复习清单，下次打开还在</span>
+        </div>
+      </div>
+
+      <div class="hits" id="hits"></div>
+    </div>
+
+    <!-- 资料 -->
+    <div class="panel" id="panel-docs">
+      <div class="import">
+        <div class="import-row">
+          <input id="doc-name" placeholder="文档名，例如 07-操作系统-IO.md" />
+          <button class="ghost" id="btn-pick">选择文件</button>
+          <input type="file" id="file" accept=".md,.txt,.markdown" multiple hidden />
+        </div>
+        <textarea id="doc-text" placeholder="把笔记或论文片段粘在这里（.md / .txt 纯文本），也可以点「选择文件」"></textarea>
+        <div class="import-foot">
+          <span class="hint">切片 320 字 / 重叠 60 字 → 本地向量化 → 写入 seekdb → 刷新索引</span>
+          <button class="primary" id="btn-import">导入当前资料集</button>
+        </div>
+      </div>
+      <div id="import-report" class="report hidden"></div>
+      <div class="table-wrap">
+        <table class="tbl" id="chunk-table">
+          <thead><tr><th>资料集</th><th>片段数</th><th>向量维度</th><th>索引</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 复习 -->
+    <div class="panel" id="panel-memory">
+      <div class="mem-stats" id="mem-stats"></div>
+      <div class="mem-list" id="mem-list"></div>
+      <div class="mem-foot">
+        <a class="ghost" id="btn-export" href="/api/export/review?learner=demo" target="_blank">导出复习清单 .md</a>
+        <span class="hint" id="mem-hint"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+.env
+seekdb-data/
+*.log
+.DS_Store
+__pycache__/
+
+# 模型（23 MB INT8 ONNX）随仓库提交，保证评审克隆后即可离线运行
+# 如需减小仓库体积，可改为忽略 models/ 并执行 npm run fetch-models

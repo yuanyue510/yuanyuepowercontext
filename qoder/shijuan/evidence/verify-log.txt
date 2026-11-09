@@ -1,0 +1,32 @@
+拾卷 · 端到端验收  2026/11/9 20:22:43
+服务地址 http://127.0.0.1:8790｜学习者 verify-runner｜资料集 期末复习
+========================================================================
+PASS  服务健康检查 /api/health  — seekdb 5.7.25-OceanBase seekdb-v1.4.0.0
+PASS  seekdb 为 OceanBase seekdb 实例  — shijuan
+PASS  导入 6 篇学习资料  — 33 个片段，向量化 493ms
+PASS  导入后自检：新片段立即可检索
+PASS  重复导入同一文件是幂等的  — 再次导入后片段总数 33
+PASS  检索模式 hybrid  — top1=02-操作系统-虚拟内存.md cos=0.9672 检索 21ms
+PASS  检索模式 vector  — top1=02-操作系统-虚拟内存.md cos=0.6586 检索 5ms
+PASS  检索模式 fulltext  — top1=02-操作系统-虚拟内存.md cos=-2.6992 检索 8ms
+PASS  混合检索同时召回了向量与关键词命中的文档  — hybrid 命中 8 条 / 来源 3 篇
+PASS  提问命中资料并给出带引用的答案  — 覆盖 100%，引用 2 条
+PASS  答案包含可追溯的出处与编号
+PASS  答案包含完整的五步处理流程
+PASS  检索耗时在可交互范围（<500ms）  — 29ms
+PASS  资料未覆盖的问题被识别  — 覆盖 29%
+PASS  未覆盖问题自动写入薄弱点  — weak #1 概念「React的useEffect依赖数组怎么写」
+PASS  新会话能读回上次的薄弱点  — 2 条待复习
+PASS  手动标记「没懂」写入记忆  — weak #2
+PASS  薄弱点按标记次数排序（次数多的在前）  — 首条 misses=2
+PASS  复习后状态置为已掌握  — weak #1 → mastered
+PASS  已掌握条目不再出现在待复习列表
+PASS  seekdb 中能查到本次记忆行  — #1 React的useEffect依赖数组怎么写 mastered / #2 TCP慢启动什么时候结束 open
+PASS  seekdb 中能查到本次提问记录  — 4 条
+PASS  seekdb 中存在记忆四表  — sj_collections, sj_learners, sj_questions, sj_reviews, sj_weakpoints
+PASS  文档集合已登记在 sdk_collections  — sj_c_69fed40d72 → c$v2$d9fb5e90dc3711f19dd5000c29976e2a
+PASS  文档表包含 VECTOR 列（seekdb 原生向量类型）  — _id:varbinary document:string embedding:VECTOR(512) metadata:json
+PASS  文档表同时建有 FULLTEXT 与 VECTOR 索引  — BTREE + FULLTEXT + VECTOR
+PASS  导出复习清单 Markdown  — 207 字节
+========================================================================
+结果：27/27 通过，0 失败，总耗时 3.3s

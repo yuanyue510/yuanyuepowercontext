@@ -1,0 +1,24 @@
+{
+  "name": "shijuan",
+  "version": "1.0.0",
+  "description": "拾卷：本地向量化 + seekdb 混合检索 + 学习记忆 的学习科研助手",
+  "type": "module",
+  "main": "server/index.mjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "fetch-models": "node scripts/fetch-models.mjs",
+    "seed": "node --env-file-if-exists=.env scripts/seed.mjs",
+    "verify": "node --env-file-if-exists=.env tools/verify.mjs",
+    "reset": "node --env-file-if-exists=.env tools/reset.mjs"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0",
+    "seekdb": "^1.4.0"
+  }
+}

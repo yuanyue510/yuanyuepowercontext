@@ -1,0 +1,207 @@
+{
+  "at": "2026-11-09T12:22:46.787Z",
+  "base": "http://127.0.0.1:8790",
+  "learner": "verify-runner",
+  "collection": "期末复习",
+  "seekdb": {
+    "version": "5.7.25-OceanBase seekdb-v1.4.0.0",
+    "database": "shijuan"
+  },
+  "import": {
+    "chunks": 33,
+    "ms": {
+      "chunk": 0,
+      "embed": 493,
+      "write": 184,
+      "refresh": 723,
+      "verify": 27,
+      "total": 1427
+    },
+    "selfCheck": true
+  },
+  "modes": {
+    "hybrid": {
+      "ms": 21,
+      "top1": "02-操作系统-虚拟内存.md",
+      "hits": 8
+    },
+    "vector": {
+      "ms": 5,
+      "top1": "02-操作系统-虚拟内存.md",
+      "hits": 8
+    },
+    "fulltext": {
+      "ms": 8,
+      "top1": "02-操作系统-虚拟内存.md",
+      "hits": 8
+    }
+  },
+  "ask": {
+    "covered": {
+      "query": "缺页中断的处理流程是什么",
+      "coverage": 1,
+      "citations": 2,
+      "totalMs": 29
+    },
+    "uncovered": {
+      "query": "React 的 useEffect 依赖数组怎么写",
+      "coverage": 0.286,
+      "weakId": 1
+    }
+  },
+  "memory": {
+    "open": 1,
+    "mastered": 1,
+    "rows": 2
+  },
+  "tables": [
+    "sj_collections",
+    "sj_learners",
+    "sj_questions",
+    "sj_reviews",
+    "sj_weakpoints"
+  ],
+  "collectionTable": "c$v2$d9fb5e90dc3711f19dd5000c29976e2a",
+  "indexTypes": [
+    "BTREE",
+    "FULLTEXT",
+    "VECTOR"
+  ],
+  "results": [
+    {
+      "name": "服务健康检查 /api/health",
+      "ok": true,
+      "detail": "seekdb 5.7.25-OceanBase seekdb-v1.4.0.0"
+    },
+    {
+      "name": "seekdb 为 OceanBase seekdb 实例",
+      "ok": true,
+      "detail": "shijuan"
+    },
+    {
+      "name": "导入 6 篇学习资料",
+      "ok": true,
+      "detail": "33 个片段，向量化 493ms"
+    },
+    {
+      "name": "导入后自检：新片段立即可检索",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "重复导入同一文件是幂等的",
+      "ok": true,
+      "detail": "再次导入后片段总数 33"
+    },
+    {
+      "name": "检索模式 hybrid",
+      "ok": true,
+      "detail": "top1=02-操作系统-虚拟内存.md cos=0.9672 检索 21ms"
+    },
+    {
+      "name": "检索模式 vector",
+      "ok": true,
+      "detail": "top1=02-操作系统-虚拟内存.md cos=0.6586 检索 5ms"
+    },
+    {
+      "name": "检索模式 fulltext",
+      "ok": true,
+      "detail": "top1=02-操作系统-虚拟内存.md cos=-2.6992 检索 8ms"
+    },
+    {
+      "name": "混合检索同时召回了向量与关键词命中的文档",
+      "ok": true,
+      "detail": "hybrid 命中 8 条 / 来源 3 篇"
+    },
+    {
+      "name": "提问命中资料并给出带引用的答案",
+      "ok": true,
+      "detail": "覆盖 100%，引用 2 条"
+    },
+    {
+      "name": "答案包含可追溯的出处与编号",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "答案包含完整的五步处理流程",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "检索耗时在可交互范围（<500ms）",
+      "ok": true,
+      "detail": "29ms"
+    },
+    {
+      "name": "资料未覆盖的问题被识别",
+      "ok": true,
+      "detail": "覆盖 29%"
+    },
+    {
+      "name": "未覆盖问题自动写入薄弱点",
+      "ok": true,
+      "detail": "weak #1 概念「React的useEffect依赖数组怎么写」"
+    },
+    {
+      "name": "新会话能读回上次的薄弱点",
+      "ok": true,
+      "detail": "2 条待复习"
+    },
+    {
+      "name": "手动标记「没懂」写入记忆",
+      "ok": true,
+      "detail": "weak #2"
+    },
+    {
+      "name": "薄弱点按标记次数排序（次数多的在前）",
+      "ok": true,
+      "detail": "首条 misses=2"
+    },
+    {
+      "name": "复习后状态置为已掌握",
+      "ok": true,
+      "detail": "weak #1 → mastered"
+    },
+    {
+      "name": "已掌握条目不再出现在待复习列表",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "seekdb 中能查到本次记忆行",
+      "ok": true,
+      "detail": "#1 React的useEffect依赖数组怎么写 mastered / #2 TCP慢启动什么时候结束 open"
+    },
+    {
+      "name": "seekdb 中能查到本次提问记录",
+      "ok": true,
+      "detail": "4 条"
+    },
+    {
+      "name": "seekdb 中存在记忆四表",
+      "ok": true,
+      "detail": "sj_collections, sj_learners, sj_questions, sj_reviews, sj_weakpoints"
+    },
+    {
+      "name": "文档集合已登记在 sdk_collections",
+      "ok": true,
+      "detail": "sj_c_69fed40d72 → c$v2$d9fb5e90dc3711f19dd5000c29976e2a"
+    },
+    {
+      "name": "文档表包含 VECTOR 列（seekdb 原生向量类型）",
+      "ok": true,
+      "detail": "_id:varbinary document:string embedding:VECTOR(512) metadata:json"
+    },
+    {
+      "name": "文档表同时建有 FULLTEXT 与 VECTOR 索引",
+      "ok": true,
+      "detail": "BTREE + FULLTEXT + VECTOR"
+    },
+    {
+      "name": "导出复习清单 Markdown",
+      "ok": true,
+      "detail": "207 字节"
+    }
+  ]
+}
