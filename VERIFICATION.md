@@ -5,7 +5,7 @@
 >
 > 采集时验证环境未持有模型 Key，LLM 节点指向一个 OpenAI 兼容的轻量桩服务（`verification/mock_llm.py`）。
 > 它只负责按 context 里的账本拼出台词，**图结构、两次 HTTP 读写、账本落库、跨会话检索全部是真实执行**。
-> 评审按 §2 接入真实 `deepseek-flash` 后，流程与数据完全一致，只有台词质量不同。
+> 评审按 `README.md` §4.4 接入真实 `deepseek-flash` 后，流程与数据完全一致，只有台词质量不同。
 
 ---
 

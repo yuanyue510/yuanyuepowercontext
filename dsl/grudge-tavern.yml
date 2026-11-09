@@ -238,7 +238,7 @@ workflow:
             size: 10
         model:
           completion_params:
-            max_tokens: 900
+            max_tokens: 2000
             temperature: 0.85
           mode: chat
           name: deepseek-flash

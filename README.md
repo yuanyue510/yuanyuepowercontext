@@ -113,6 +113,8 @@ cp .env.example .env && docker compose up -d
 | API endpoint URL | `https://api.deepseek.com` |
 | Mode / Context / Max tokens | chat / 65536 / 8192 |
 
+> 两个实操提示：① DeepSeek 当前模型默认开启**思考模式**，思考会先占输出预算；能关就关，DSL 里 `三娘` 节点 `max_tokens` 已放宽到 2000。② 导入 DSL 若提示依赖插件版本不一致（指定 `openai_api_compatible` **0.0.17**），先装同版本插件，或导入后在「三娘」节点重新选模型。
+
 > 本作品**未使用 Embedding / Rerank，也未绑定任何知识库**。`lore` 检索与账本查询都是 seekdb 的关键词匹配 + 结构化过滤（SQL `LIKE` / `WHERE`），DSL 导入后无需再绑知识库。
 
 ### 5.5 没有 API Key 时如何验证

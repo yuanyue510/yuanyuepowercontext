@@ -1,3 +1,8 @@
+# 执行命令（与 evidence/screenshots/03-seekdb.png 顶部一致）
+$ obclient -h127.0.0.1 -P2881 -uroot --password='' \
+    -e "USE tavern; SELECT player,reputation,debt,bounty,visits,last_seen FROM players; \
+        SELECT id,player,kind,severity,amount,quote FROM ledger ORDER BY id;"
+
 player	reputation	debt	bounty	visits	last_seen
 张三	29	28	0	1	2026-11-08 10:47:43
 王五	41	0	0	1	2026-11-06 11:12:54
