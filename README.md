@@ -13,7 +13,7 @@
 
 | 赛题条款 | 交付文件 | 说明 |
 |---|---|---|
-| **4.1 Dify DSL** | [`dsl/grudge-tavern.yml`](dsl/grudge-tavern.yml) | 唯一 DSL 文件，直接导入。Chatflow 共 **7 个节点**：开始 → 进库(HTTP) → 打包请求(代码) → 查账本(HTTP) → 三娘(LLM) → 记录判定(代码) → 落账(HTTP) → 直接回复。适用 Dify **1.9.1** |
+| **4.1 Dify DSL** | [`dsl/grudge-tavern.yml`](dsl/grudge-tavern.yml) | 唯一 DSL 文件，直接导入。Chatflow 共 **7 个节点**（下列为 DSL 内真实 title）：`进店`(开始) → `打包请求`(代码) → `查账本`(HTTP) → `三娘`(LLM) → `记账判定`(代码) → `落账`(HTTP) → `直接回复`(回答)。适用 Dify **1.9.1** |
 | **4.2 运行说明** | 本文件（下方第三～五节） | 玩法、Dify 与 seekdb 分工、版本环境、从零部署步骤、模型配置、已知限制 |
 | **4.3 验证样例** | [`VERIFICATION.md`](VERIFICATION.md) | 两组样例：三幕跨会话翻旧账、信誉影响实时报价。含初始状态 → 输入 → 预期 → 实际输出 → seekdb 落库记录 → 复位方法；§2.1 附规则复算自证 |
 | **4.3 运行证据** | [`evidence/`](evidence) | 4 张截图 + 2 份原始日志（见第六节表格） |
