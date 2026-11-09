@@ -15,7 +15,6 @@ REPO = os.environ.get(
     "REPO_URL",
     "https://github.com/yuanyue510/yuanyuepowercontext/tree/2026-competition-ecosystem/qoder/shijuan",
 )
-UID = os.environ.get("QODER_UID", "1940117489165517")
 
 REPO_LINE = (
     f'<a href="{REPO}" target="_blank" rel="noopener">{REPO}</a>'
@@ -39,7 +38,7 @@ def main():
         html = f.read()
     for i, name in enumerate(["01-ask.png", "02-source.png", "03-memory.png", "04-collections.png"], start=1):
         html = html.replace("{{IMG%d}}" % i, data_uri(os.path.join(SHOTS, name)))
-    html = html.replace("{{REPO_LINE}}", REPO_LINE).replace("{{UID}}", UID)
+    html = html.replace("{{REPO_LINE}}", REPO_LINE)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html)
     print("已生成", OUT, f"{os.path.getsize(OUT) // 1024} KB")

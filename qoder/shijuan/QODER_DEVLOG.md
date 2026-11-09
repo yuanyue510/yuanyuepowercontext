@@ -22,6 +22,8 @@
 | 代码仓库 | `https://github.com/yuanyue510/yuanyuepowercontext/tree/2026-competition-ecosystem/qoder/shijuan` |
 | 开发起止时间 | `2026-11-09`（Qoder 会话完成后按实际日期订正，形如 `2026-11-09 ~ 2026-11-12`） |
 
+> UID 仅用于赛事材料核对（站点归属与使用记录），不在项目网站的公开页面展示；网站「关于」处写的是「UID 见本文件」。
+
 ---
 
 ## 1. 开发节奏
