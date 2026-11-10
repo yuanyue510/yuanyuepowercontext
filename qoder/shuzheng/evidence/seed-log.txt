@@ -1,0 +1,7 @@
+
+> shuzheng@0.1.0 seed
+> node --env-file-if-exists=.env scripts/seed.mjs
+
+[seed] 物理必修1-动力学讲义｜10 小节 → 33 切片（R1 合并 4 条，短句 0 条）｜offset 自检 通过｜向量化 428 ms｜就绪门槛 轮询 3 次 × 200 ms（上限 10000 ms）= 446 ms｜集合 sh_ds_doc_43cbe2d2（doc doc_dd65bb7790）｜重建同名集合
+[seed] 生物必修1-细胞代谢讲义｜9 小节 → 33 切片（R1 合并 7 条，短句 0 条）｜offset 自检 通过｜向量化 146 ms｜就绪门槛 轮询 3 次 × 200 ms（上限 10000 ms）= 425 ms｜集合 sh_ds_doc_3e42fa73（doc doc_03ee62e3b9）｜重建同名集合
+[seed] 当前登记：生物必修1-细胞代谢讲义(33 切片, ready)、物理必修1-动力学讲义(33 切片, ready)

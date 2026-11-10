@@ -1,0 +1,1 @@
+{"error":"状态已从 reviewing 变化，reviewing → reviewing 不是允许的流转","id":"rv_e847b9c2064cebea","from":"reviewing","to":"reviewing","allowed":["mastered","open"]}

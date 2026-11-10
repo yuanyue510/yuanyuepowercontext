@@ -1,0 +1,183 @@
+{
+  "base": "http://127.0.0.1:8790",
+  "startedAt": "2026-11-10T10:29:48.404Z",
+  "finishedAt": "2026-11-10T10:29:52.594Z",
+  "exitCode": 0,
+  "passed": 24,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "健康自检 / 零云端调用",
+      "ok": true,
+      "ms": 43,
+      "detail": "P6-导入/混合检索/证据卡/复习闭环｜192.168.192.131:2881/shijuan｜模型在位、embeddingFunction=null"
+    },
+    {
+      "name": "导入幂等（重复导入不产生重复切片）",
+      "ok": true,
+      "ms": 1876,
+      "detail": "两次均 33 切片｜集合内 33 条、id 全唯一、登记表一致｜就绪门槛 3→3 次轮询（443 ms）"
+    },
+    {
+      "name": "就绪门槛：表行数够、向量通道召回为 0 → 拒绝放行",
+      "ok": true,
+      "ms": 306,
+      "detail": "300 ms 上限内一直不放行，报错含实际/期望：集合未就绪：实际 count=0，期望 33 条（已轮询 12 次 / 上限 300 ms）"
+    },
+    {
+      "name": "就绪门槛：连续两次读数相同且 ≥ 期望才放行",
+      "ok": true,
+      "ms": 16,
+      "detail": "第 2 次读数与上次相同（33/33）才放行，耗时 16 ms"
+    },
+    {
+      "name": "检索①全文通道：$contains 单独调用是硬过滤，语料没有的词返回 0 条",
+      "ok": true,
+      "ms": 46,
+      "detail": "「ADP」→ 1 条且逐条字面含词（doc_03ee62e3b9#s5#002）；「洛伦兹力」→ 0 条"
+    },
+    {
+      "name": "检索②向量通道：query() 给出有界 cosine 距离",
+      "ok": true,
+      "ms": 6,
+      "detail": "Top5 距离 0.461 / 0.474 / 0.529 / 0.529 / 0.554（有界可比较，故排序之外不用它做判据）"
+    },
+    {
+      "name": "检索③融合语义：全文命中被顶到第 1、向量补位（并集而非 AND 过滤）",
+      "ok": true,
+      "ms": 41,
+      "detail": "全文命中的 doc_03ee62e3b9#s5#002 升到第 1（基线里根本不在 Top5），其余 4 条由向量补位；实测确认 knn 在场时全文条件只加权、不做硬过滤（assemble.js:15 的并集融合结论复核成立）"
+    },
+    {
+      "name": "检索④多路并行：/api/search 融合 k 条全文 + 1 条向量",
+      "ok": true,
+      "ms": 101,
+      "detail": "3 个查询词 → 3 条全文通道（阶段释放/能量最多/氧呼吸）+ 1 条向量通道，融合 8 张卡，channelCount 序列 44444443"
+    },
+    {
+      "name": "已覆盖判定：给出抽取式答案而不是编造",
+      "ok": true,
+      "ms": 49,
+      "detail": "覆盖率 1（≥0.34）｜最强一句含 1 词｜置信 thin｜答案 3 句"
+    },
+    {
+      "name": "证据卡 offset 逐字一致（点引用跳原文不偏一个字）",
+      "ok": true,
+      "ms": 70,
+      "detail": "3 条 statements 的 char_start–char_end 全部逐字命中（全文 1233 字）"
+    },
+    {
+      "name": "查询词必须是原文的子串（否则失败）",
+      "ok": true,
+      "ms": 257,
+      "detail": "4 条查询共 7 个查询词、7 条通道关键词，全部是原问题子串；证据卡原句均能在原文中定位"
+    },
+    {
+      "name": "未覆盖拒答：不给无出处内容",
+      "ok": true,
+      "ms": 105,
+      "detail": "覆盖率 0｜未出现词 洛伦兹力/方向/判断｜只列最近 2 条原文且声明不构成答案"
+    },
+    {
+      "name": "卡点落库：流水 + 复习队列各写一处",
+      "ok": true,
+      "ms": 118,
+      "detail": "流水 sh_stuck 29→30（st_88faff1988dd）｜队列 rv_e97b50b0236d0765 status=open miss=10 doc=doc_03ee62e3b9"
+    },
+    {
+      "name": "错次累加：同一问题再问只 +1 错次，不多建行",
+      "ok": true,
+      "ms": 95,
+      "detail": "rv_e97b50b0236d0765：miss_count 10→11，行数仍为 1，latest_stuck_id st_88faff1988dd→st_58c727274fad"
+    },
+    {
+      "name": "状态机 200：open→reviewing",
+      "ok": true,
+      "ms": 14,
+      "detail": "HTTP 200，库内 status=reviewing，status_changed_at=18:29:51"
+    },
+    {
+      "name": "状态机 409：重复提交同一边被守卫挡下",
+      "ok": true,
+      "ms": 7,
+      "detail": "HTTP 409：状态已从 reviewing 变化，reviewing → reviewing 不是允许的流转｜allowed=[mastered/open]"
+    },
+    {
+      "name": "状态机 400 / 404：非法取值与不存在的卡点",
+      "ok": true,
+      "ms": 9,
+      "detail": "status=done → 400；id=rv_not_exist_at_all → 404；两者都没动库（status 仍 reviewing）"
+    },
+    {
+      "name": "并发只推进一次：同时两次 open→reviewing",
+      "ok": true,
+      "ms": 21,
+      "detail": "HTTP 200 + 409｜status_changed_at 18:29:51→18:29:51（只推进一次）"
+    },
+    {
+      "name": "mastered 后离队：不再出现在待复习列表",
+      "ok": true,
+      "ms": 30,
+      "detail": "mastered_at=18:29:51，队列已不含 rv_e97b50b0236d0765（counts={\"open\":7,\"reviewing\":1,\"mastered\":2}）；回退 open 后 mastered_at=null（已清空，见 README 已知限制）"
+    },
+    {
+      "name": "复习页非空：字段齐全且排序正确",
+      "ok": true,
+      "ms": 8,
+      "detail": "9 条待复习（最多错 11 次），8 个必需字段齐全，排序与服务端 SQL 一致"
+    },
+    {
+      "name": "复习页空态：空队列返回空数组 + 前端文案在位",
+      "ok": true,
+      "ms": 9,
+      "detail": "空数据集过滤 → HTTP 200 且 pending=[]（{\"open\":8,\"reviewing\":1,\"mastered\":1}）；前端源码含「还没有卡点」与三个按钮文案（DOM 行为见 VERIFICATION.md 的人工验证）"
+    },
+    {
+      "name": "时延：单词键查询 warm P95 ≤ 800 ms",
+      "ok": true,
+      "ms": 285,
+      "detail": "样本 40/57/59/59/69 ms（最大 69 ms ≤ 800）"
+    },
+    {
+      "name": "时延：多关键词 4 通道串行（记录实测，超 800 ms 只列已知限制）",
+      "ok": true,
+      "ms": 361,
+      "detail": "3 次 75/83/79 ms（中位 79 ≤ 800），最大 83 ms（达标）"
+    },
+    {
+      "name": "死连接自愈：withReconnect 只重试这一类错误，且重试后真实取集合仍可用",
+      "ok": true,
+      "ms": 13,
+      "detail": "死连接错误重试 1 次后成功；非法错误没有被误重试；单例重建后 openCollection 仍读到 33 条切片"
+    }
+  ],
+  "measurements": [
+    {
+      "name": "单词键查询时延样本(ms)",
+      "value": [
+        40,
+        57,
+        59,
+        59,
+        69
+      ],
+      "thresholdMs": 800
+    },
+    {
+      "name": "多关键词查询时延(ms)",
+      "value": [
+        75,
+        83,
+        79
+      ],
+      "median": 79,
+      "max": 83,
+      "query": "有氧呼吸哪个阶段释放的能量最多",
+      "channels": 4,
+      "physicsQuery": "牛顿第二定律的适用范围是什么",
+      "physicsChannels": 3,
+      "physicsMs": 52,
+      "note": "达标"
+    }
+  ]
+}

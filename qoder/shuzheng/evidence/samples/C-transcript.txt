@@ -1,0 +1,31 @@
+C 组：状态机 200 / 409 / 400 / 404、并发只推进一次、mastered 离队
+卡点 id：rv_e847b9c2064cebea（由 B 组拒答自动写入，见 B-refusal.response.json 的 stuck.reviewId）
+基址：http://127.0.0.1:8790
+
+【库内·前】npm run show:review --silent rv_e847
+  id='rv_e847b9c2064cebea' status='open' miss=1 coverage=0 doc='doc_03ee62e3b9'
+  first_seen=16:41:10 last_seen=16:41:10 status_changed_at=16:41:10 mastered_at=null
+
+【1】POST /api/review/rv_e847b9c2064cebea/state  {"status":"reviewing"}   → HTTP 200   （C-1-reviewing.body.json）
+【2】同上再发一次（重复提交同一条边）                                        → HTTP 409   （C-2-conflict.body.json）
+     {"error":"状态已从 reviewing 变化，reviewing → reviewing 不是允许的流转",
+      "id":"rv_e847b9c2064cebea","from":"reviewing","to":"reviewing","allowed":["mastered","open"]}
+【3】{"status":"done"}（状态机里没有这个取值）                              → HTTP 400   （C-3-badstatus.body.json）
+【4】POST /api/review/rv_not_exist/state {"status":"reviewing"}             → HTTP 404   （C-4-notfound.body.json）
+     3、4 两条都没有改动库内状态（复核 status 仍为 reviewing）
+
+【5】并发：先复位 open，然后同一瞬间发两条 {"status":"reviewing"}
+     A → HTTP 200  {"ok":true,...,"row":{"status":"reviewing","allowed":["mastered","open"]}}（C-5-race-a.body.json）
+     B → HTTP 409  （C-5-race-b.body.json）
+     实现只有一条语句：UPDATE sh_review SET status=?, status_changed_at=?, mastered_at=?
+                       WHERE id=? AND status IN ('open')
+     以 affectedRows 作为唯一裁判，所以两条并发请求必然只有一条推进。
+
+【6】POST {"status":"mastered"} → HTTP 200（C-6-mastered.body.json）
+【7】GET /api/review?limit=200 → pending 里已不含该 id，counts={"open":8,"reviewing":1,"mastered":1}（C-7-pending.json）
+
+【库内·后】npm run show:review --silent rv_e847
+  id='rv_e847b9c2064cebea' status='mastered' miss=1 coverage=0 doc='doc_03ee62e3b9'
+  first_seen=16:41:10 last_seen=16:41:10 status_changed_at=16:41:46 mastered_at=16:41:46
+  → 一整轮 open→reviewing→mastered 只推进了 1 次时间戳（6 次 HTTP 写请求里 4 次被挡在门外）
+  → miss_count 保持 1：状态流转不记错次，只有拒答落库才 +1

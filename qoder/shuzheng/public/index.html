@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>书证 · 教材口径复习助手</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <header>
+      <h1>书证</h1>
+      <span id="health-badge" class="badge">检测中…</span>
+    </header>
+
+    <nav id="tabs">
+      <button data-view="import" class="active">导入</button>
+      <button data-view="search">检索</button>
+      <button data-view="review">卡点复习</button>
+      <button data-view="status">状态</button>
+    </nav>
+
+    <main id="view">
+      <section data-view="import">
+        <div class="panel">
+          <h2>F1 导入资料</h2>
+          <label>资料集名称（中文，界面只看中文名）<input id="ds-name" placeholder="物理必修1-动力学讲义" /></label>
+          <label>本地文件（.md / .txt / .html，≤ 2 MB）<input id="ds-file" type="file" accept=".md,.txt,.html,.markdown" /></label>
+          <label>或直接粘贴文本<textarea id="ds-text" rows="6" placeholder="# 3.2 牛顿第二定律&#10;物体的加速度跟所受合外力成正比…"></textarea></label>
+          <button id="ds-submit" class="primary">导入并向量化</button>
+          <p class="note">同名资料集重复导入是整体重建（幂等），不产生重复切片。流水线：解析 → 小节树 → 句级切片(R1/R2) → 本地 ONNX 向量化 → 写 seekdb → 就绪门槛。</p>
+          <div id="ds-result"></div>
+        </div>
+        <div class="panel">
+          <h2>已登记资料集（sh_registry）</h2>
+          <div id="ds-table"></div>
+        </div>
+      </section>
+
+      <section data-view="search" hidden>
+        <div class="panel row">
+          <select id="q-dataset"></select>
+          <input id="q-text" placeholder="什么是牛顿第二定律" size="36" />
+          <label class="inline">Top <input id="q-n" type="number" value="8" min="1" max="32" style="width:4.5em" /></label>
+          <button id="q-submit" class="primary">检索</button>
+        </div>
+        <div id="q-answer"></div>
+        <div id="q-coverage"></div>
+        <div id="q-cards"></div>
+        <div id="reader" class="reader" hidden>
+          <header>
+            <strong id="reader-title"></strong>
+            <button id="reader-close">关闭</button>
+          </header>
+          <p class="offset-check note"></p>
+          <pre id="reader-body" class="doc"></pre>
+        </div>
+      </section>
+
+      <section data-view="review" hidden>
+        <div class="panel row">
+          <select id="rv-dataset"></select>
+          <label class="inline">前 <input id="rv-limit" type="number" value="20" min="1" max="200" style="width:4.5em" /> 条</label>
+          <button id="rv-refresh">刷新</button>
+          <span id="rv-counts" class="note"></span>
+        </div>
+        <p id="rv-status" class="busy"></p>
+        <div id="rv-list"></div>
+        <p class="note">
+          队列取自 seekdb 关系表 sh_review：只列 status = open / reviewing，按「错次 DESC、最近出现 ASC」排。
+          三个按钮走 POST /api/review/:id/state，合法边只有 open→reviewing→mastered 以及回退到 open。
+        </p>
+      </section>
+
+      <section data-view="status" hidden>
+        <pre id="health-json"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

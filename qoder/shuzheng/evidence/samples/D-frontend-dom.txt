@@ -1,0 +1,23 @@
+前端「复习」标签页 DOM 验证（http://127.0.0.1:8790/，浏览器面板未展开，无法出图，故记录结构化 DOM 断言）
+
+驱动方式：browser-use evaluate_script —— 点击 [data-view="review"] 标签，等 1.2s，读渲染结果。
+
+1) 非空态
+   #rv-counts            : 待复习 9 条｜已掌握 1 条
+   #rv-list .card.review : 9 张
+   第一张（status=open）按钮态：还没懂[disabled]  在复习  已掌握[disabled]
+     → 与库内 allowed=["reviewing"] 一致：当前态与非法边都置灰，前端不自己猜状态机
+   第一张 .card-meta     : 资料集：生物必修1-细胞代谢讲义｜覆盖率 0｜未出现词：开普勒第三定律、常数、取值
+                           最近证据 docId：doc_03ee62e3b9｜卡点 st_e149bd7c320d
+                           首次 2026/11/10 16:31:53｜最近 2026/11/10 16:40:20｜状态变更 2026/11/10 16:40:20
+
+2) 空态
+   把 #rv-dataset 切到一个没有卡点的资料集名并点 #rv-refresh：
+   #rv-list .empty       : 还没有卡点
+   #rv-list .card.review : 0 张（不留白、不报错）
+   恢复后                : 9 张，计数回到「待复习 9 条｜已掌握 1 条」
+
+3) 控制台：无 error / 无未捕获异常（页面加载 + 两次刷新 + 一次空态切换）
+
+未验证项（README 已知限制第 3 条）：像素级样式与响应式布局未截图确认，本环境浏览器面板折叠导致
+take_screenshot 返回 NATIVE_BROWSER_VIEWPORT_UNAVAILABLE；上述断言只覆盖 DOM 结构与状态置灰逻辑。

@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+seekdb-data/
+data/
+# UID 核对截图含账号名与阿里云账号 ID，只随提交附件提供，不进公开仓库
+docs/qoder/00-account-uid.png

@@ -1,0 +1,28 @@
+{
+  "name": "shuzheng",
+  "version": "0.1.0",
+  "private": true,
+  "description": "教材口径复习助手：seekdb 混合检索 + 本地 ONNX embedding，零云端模型调用",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "probe": "node --env-file-if-exists=.env scripts/probe-seekdb.mjs",
+    "smoke": "node --env-file-if-exists=.env scripts/smoke-seekdb.mjs",
+    "verify:distances": "node --env-file-if-exists=.env scripts/verify-distances.mjs",
+    "verify:p5": "node --env-file-if-exists=.env scripts/verify-p5.mjs",
+    "seed": "node --env-file-if-exists=.env scripts/seed.mjs",
+    "verify": "node --env-file-if-exists=.env scripts/verify.mjs",
+    "show:review": "node --env-file-if-exists=.env scripts/show-review.mjs",
+    "demo:import": "node --env-file-if-exists=.env scripts/p4-import-demo.mjs"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.5.1",
+    "express": "^4.21.2",
+    "mysql2": "^3.11.5",
+    "seekdb": "^1.4.0"
+  }
+}
