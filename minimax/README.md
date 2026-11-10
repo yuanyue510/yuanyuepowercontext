@@ -58,6 +58,7 @@ bash scripts/check_minimax.sh         # 可选：先确认 Key / 模型 / 额度
 pip install "powercontext[cli,server]==1.5.1" && powercontext server run
 bash scripts/verify.sh                # 一键跑完 8 个步骤
 bash scripts/state_reuse_demo.sh      # 单独演示：状态写入 → 服务重启 → 读回
+bash scripts/replay_recorded_patch.sh # 没有 MiniMax Key 时：重放记录中的补丁，复现「8 红 → 19 绿」
 ```
 
 完整依赖、配置项与已知限制见 [docs/RUNBOOK.md](docs/RUNBOOK.md)；

@@ -1,0 +1,24 @@
+== 0) 复位到修改前基线
+4bf14e394f637a1140468c9d10b0e7c5  baseline/service.py
+4bf14e394f637a1140468c9d10b0e7c5  sample_project/ordersvc/service.py
+
+== 1) 修改前测试（目标用例应失败）
+FAILED tests/test_query_target.py::test_filter_preserves_insert_order - Asser...
+8 failed, 11 passed in 0.03s
+exit=1
+
+== 2) 重放补丁 records/patch.diff
+涉及文件: ['ordersvc/service.py']
+应用结果: True | ordersvc/service.py: 3 个 hunk
+
+== 3) 修改后测试（应全部通过）
+...................                                                      [100%]
+19 passed in 0.01s
+exit=0
+
+== 4) 与记录中的「修改后快照」比对
+与 records/snapshot_after_service.py 一致
+
+== 5) 还原到基线（保持工作区为「修改前」状态）
+
+RESULT: PASS —— 修改前 1（非 0，目标用例失败）→ 修改后 0（全部通过）

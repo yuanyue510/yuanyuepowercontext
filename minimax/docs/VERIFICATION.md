@@ -122,6 +122,26 @@ python -m sdd_context state-show --task-id T-ORDER-FILTER # 新进程读回状�
 **产物等价性校验**：把 `records/patch.diff` 应用到 `baseline/service.py` 的副本，结果与
 `records/snapshot_after_service.py` 逐字节一致——最终代码完全来自 MiniMax 的补丁，没有任何手改。
 
+## 6.2 没有 MiniMax Key 时如何核对「代码修改有效」
+
+评审环境通常不会带参赛者的模型 Key，因此提供一条不依赖模型的复现路径：
+
+```bash
+bash scripts/replay_recorded_patch.sh
+```
+
+该脚本做的事：
+
+1. 把 `sample_project/ordersvc/service.py` 复位到 `baseline/service.py`（修改前快照）；
+2. 跑测试 → 期望 `8 failed, 11 passed`，退出码非 0；
+3. 把 `records/patch.diff`（MiniMax 当时真实产出的补丁）用内置应用器重放到代码上；
+4. 再跑测试 → 期望 `19 passed`，退出码 0；
+5. 与 `records/snapshot_after_service.py` 比对，确认与记录中的修改后快照一致；
+6. 还原到基线，工作区保持「修改前」状态。
+
+实测输出见 `records/10_replay_patch.log`。这条路径只重放已验证的补丁，
+不重新调用模型——符合题面「MiniMax 的使用通过开发记录核对，不要求模型重新生成完全相同的补丁」。
+
 ## 7. 规格变更演示（证明不是固定答案）
 
 ```bash
