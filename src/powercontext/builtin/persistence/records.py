@@ -32,6 +32,7 @@ from powercontext.artifacts import Artifact, ArtifactRef
 from powercontext.builtin.artifacts.memory import MemoryCitation, MemoryEntryVersion, MemoryService
 from powercontext.builtin.persistence.artifacts import ArtifactRepository
 from powercontext.builtin.persistence.cursor_codec import SignedCursorCodec
+from powercontext.builtin.persistence.cursors import SourceCursorRepository
 from powercontext.builtin.persistence.database import AsyncDatabase
 from powercontext.builtin.persistence.errors import (
     RepositoryNotFoundError,
@@ -95,6 +96,15 @@ _SOURCE_PAGE_BUDGET_BYTES = 4 * 1024 * 1024
 class RelationalRecordService:
     """Serve fixed Source and Artifact paths over the shared relational tables."""
 
+    async def source_pending_count(self, scope_id: str, binding_name: str, /) -> int:
+        """Count journal identities after the last successfully committed cursor."""
+
+        async with self._database.transaction() as connection:
+            head = await self._sources.journal_position(connection, scope_id)
+            stored = await SourceCursorRepository().load(connection, scope_id, binding_name)
+        sequence = 0 if stored is None else stored.cursor.sequence
+        return max(head - sequence, 0)
+
     async def migrate_handoff_receipts(
         self,
         committed_identity_lookup: Callable[[str, str], Awaitable[object | None]],
@@ -142,6 +152,11 @@ class RelationalRecordService:
             clock=self._clock,
             cursor_ttl_seconds=cursor_ttl_seconds,
         )
+
+    @property
+    def database(self) -> AsyncDatabase:
+        """Expose the shared database for transactional subsystems."""
+        return self._database
 
     async def get_tags(self, scope_id: str, target: TagTarget) -> ArtifactTagSet:
         return await self._tags.get(scope_id, target)

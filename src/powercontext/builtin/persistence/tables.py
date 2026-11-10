@@ -1180,6 +1180,44 @@ RECURRENCE_OBSERVATION_TABLE = Table(
 
 RECURRENCE_TABLES = (RECURRENCE_MATCH_TABLE, RECURRENCE_OBSERVATION_TABLE)
 
+# Source lifecycle graphs keep one row per registered node plus an append-only
+# event ledger; availability is denormalized onto nodes for fast reconciliation.
+LIFECYCLE_NODES_TABLE = Table(
+    "pc_lifecycle_nodes",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("node_id", identity_string(128), primary_key=True),
+    Column("ordinal", BigInteger, nullable=False),
+    Column("kind", String(16), nullable=False),
+    Column("policy", String(8)),
+    Column("parents", Text, nullable=False),
+    Column("reference", Text, nullable=False),
+    Column("lifecycle_revision", Integer),
+    Column("available", Boolean, nullable=False),
+    ForeignKeyConstraint(("scope_id",), ("pc_scopes.scope_id",), ondelete="CASCADE"),
+    Index("ix_pc_lifecycle_nodes_ordinal", "scope_id", "ordinal"),
+    CheckConstraint("ordinal >= 0", name="ck_pc_lifecycle_nodes_ordinal"),
+    CheckConstraint("kind IN ('source', 'memory', 'topic')", name="ck_pc_lifecycle_nodes_kind"),
+    CheckConstraint("policy IN ('all', 'any')", name="ck_pc_lifecycle_nodes_policy"),
+    CheckConstraint("lifecycle_revision > 0", name="ck_pc_lifecycle_nodes_revision"),
+)
+
+LIFECYCLE_EVENTS_TABLE = Table(
+    "pc_lifecycle_events",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("node_id", identity_string(128), primary_key=True),
+    Column("sequence", BigInteger, primary_key=True),
+    Column("revision", Integer, nullable=False),
+    Column("available", Boolean, nullable=False),
+    Column("reason", String(256), nullable=False),
+    ForeignKeyConstraint(("scope_id",), ("pc_scopes.scope_id",), ondelete="CASCADE"),
+    CheckConstraint("sequence > 0", name="ck_pc_lifecycle_events_sequence"),
+    CheckConstraint("revision > 0", name="ck_pc_lifecycle_events_revision"),
+)
+
+LIFECYCLE_TABLES = (LIFECYCLE_NODES_TABLE, LIFECYCLE_EVENTS_TABLE)
+
 BUILTIN_TABLES = (
     SCOPE_TABLES
     + SHARED_TABLES
@@ -1188,4 +1226,5 @@ BUILTIN_TABLES = (
     + STATISTICS_TABLES
     + RECURRENCE_TABLES
     + (ARTIFACT_TAGS_TABLE, DREAM_RUNS_TABLE, RECEIPT_MIGRATION_REVIEW_TABLE)
+    + LIFECYCLE_TABLES
 )

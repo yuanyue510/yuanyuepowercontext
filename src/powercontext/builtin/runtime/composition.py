@@ -98,6 +98,7 @@ from powercontext.builtin.persistence.processing_migration import (
 )
 from powercontext.builtin.persistence.scope_search_schema import ensure_scope_search_schema
 from powercontext.builtin.persistence.seekdb.profile import SeekDBConfig, SeekDBProfile
+from powercontext.builtin.persistence.seekdb.memory_index import SeekDBMemoryHybridIndex
 from powercontext.builtin.persistence.skill_distribution_schema import ensure_skill_distribution_schema
 from powercontext.builtin.persistence.sqlite.experience_index import SQLiteExperienceFTSIndex
 from powercontext.builtin.persistence.sqlite.memory_index import SQLiteMemoryFTSIndex, SQLiteMemoryVectorIndex
@@ -651,11 +652,18 @@ async def open_builtin_runtime(
                 scheduled_source_runner=scheduled_source_runner,
                 scheduled_experience_runner=scheduled_experience_runner,
                 remote_ingestion=contexts,
+                memory_source_count_threshold=config.runtime.memory_source_count_threshold,
+                topic_memory_source_count_threshold=config.runtime.topic_memory_source_count_threshold,
             )
         )
         runtime.artifact_processing_supervisor = await resources.enter_async_context(
             _open_artifact_processing_supervisor(config, contexts, processing_bindings, tracing=tracing)
         )
+        if (
+            config.runtime.memory_source_count_threshold is not None
+            or config.runtime.topic_memory_source_count_threshold is not None
+        ):
+            runtime.resume_count_triggered_processing()
         contexts.profiles.operation_context = runtime._operation
         if config.handoff_report.enabled:
             runtime.handoff_report = HandoffReportApplication(
@@ -964,6 +972,10 @@ async def open_builtin_contexts(
     if embedding_model is not None:
         indexes.append(OceanBaseMemoryVectorIndex(embedding_model.profile))
     index = CompositeMemoryIndex(*indexes)
+    if isinstance(database, SeekDBConfig):
+        # seekdb answers FULLTEXT and ANN inside one engine, so its Memory index
+        # fuses both channels through a single native candidate statement.
+        index = SeekDBMemoryHybridIndex(None if embedding_model is None else embedding_model.profile)
     topic_indexes: list[TopicMemoryIndex] = [OceanBaseTopicMemoryFTSIndex()]
     if embedding_model is not None:
         topic_indexes.append(OceanBaseTopicMemoryVectorIndex(embedding_model.profile))

@@ -126,6 +126,7 @@ from powercontext.builtin.code.errors import CodeError
 from powercontext.builtin.code.models import CodeConfig, CodeQueryRequest, CodeQueryResult
 from powercontext.builtin.code.service import CodeService
 from powercontext.builtin.context import BuiltinArtifacts, BuiltinSources
+from powercontext.builtin.triggers.source_window import SOURCE_WINDOW_TRIGGER_NAME
 from powercontext.builtin.dream.application import DreamApplication
 from powercontext.builtin.dream.service import CandidateAttester, DreamAuthorizer, DreamService
 from powercontext.builtin.runtime.context_pack import ContextPack, ContextPackDelta, ContextPackError
@@ -250,6 +251,7 @@ from powercontext.builtin.runtime.recall_sufficiency import (
     recall_effort,
 )
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics, overview_selection
+from powercontext.builtin.runtime.source_lifecycle import LifecycleApplication, topic_availability_map
 from powercontext.builtin.scope import ScopeApplication, ScopeDescriptor, ScopeSelection
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
 from powercontext.builtin.sources import (
@@ -489,10 +491,12 @@ class ScopedSourceApplication:
                             span.set_attributes({_MEMORY_CAPTURE_SOURCE_COUNT: 1})
             except BaseValueConflictError as error:
                 raise SourceConflictError("identity", error.identity) from None
-            return SourceReceipt(
+            receipt = SourceReceipt(
                 source_ref=SourceRef(source_type=record.source_type, source_id=record.source_id),
                 sequence=record.position,
             )
+            await self._runtime._count_trigger_after_capture(self.scope_id)
+            return receipt
         async with self._runtime._context(self.scope_id) as context:
             with self._runtime._stage(_MEMORY_CAPTURE_STAGE, attributes={}) as span:
                 source, sequence = await context.sources.capture(
@@ -564,7 +568,11 @@ class ScopedRecordApplication:
         /,
     ) -> ArtifactCreated:
         async with self._runtime._scope_operation(self.scope_id), self._runtime._locked(self.scope_id):
-            return await self._runtime._records().create_artifact(self.scope_id, family, write)
+            created = await self._runtime._records().create_artifact(self.scope_id, family, write)
+        # Server-side lineage Sources occupy a journal identity and participate in
+        # count-trigger admission, so artifact creation re-runs the threshold check.
+        await self._runtime._count_trigger_after_capture(self.scope_id)
+        return created
 
     async def get_artifact(self, family: str, artifact_id: str, /) -> ArtifactRecord:
         async with self._runtime._scope_operation(self.scope_id):
@@ -2747,6 +2755,15 @@ class ScopedTopicMemoryApplication:
                         "unit": "topic-memory",
                     },
                 )
+        availability = await topic_availability_map(self._runtime, self.scope_id)
+        if availability is not None:
+            hits = tuple(
+                hit
+                for hit in result.hits
+                if availability.get(hit.artifact_ref.artifact_id, True)
+            )
+            if len(hits) != len(result.hits):
+                result = result.model_copy(update={"hits": hits})
         return result
 
     async def _search_with_embedding(
@@ -3091,6 +3108,8 @@ class BuiltinRuntime:
         remote_ingestion: RemoteIngestion | None = None,
         dream_service: DreamService | None = None,
         generation_concurrency: int = 4,
+        memory_source_count_threshold: int | None = None,
+        topic_memory_source_count_threshold: int | None = None,
     ) -> None:
         if source_window_limit < 1:
             raise _RuntimeConfigurationError("source_window_limit")
@@ -3136,6 +3155,10 @@ class BuiltinRuntime:
         self._prompt_service = prompt_service
         self._recall_token_estimator = recall_token_estimator
         self._recall_effort_sink = recall_effort_sink
+        self.memory_source_count_threshold = memory_source_count_threshold
+        self.topic_memory_source_count_threshold = topic_memory_source_count_threshold
+        self._scope_ids = scope_ids
+        self._count_trigger_tasks: set[asyncio.Task] = set()
         # Public read-only seam for the cross-family decision role; deterministic Runtime callers
         # (and tests) read it directly, and it is always fail-open wrapped before it gets here.
         self.decision_model = decision_model
@@ -3175,6 +3198,7 @@ class BuiltinRuntime:
         self.memory = MemoryApplication(self)
         self.topic_memory = TopicMemoryApplication(self)
         self.records = RecordApplication(self)
+        self.lifecycle = LifecycleApplication(self)
         self.prompts = PromptApplication(self)
         self.review = ReviewApplication(self)
         self.skill = SkillApplication(self)
@@ -3321,12 +3345,96 @@ class BuiltinRuntime:
             self._dream_service.authorization_context = context
             self._dream_service.attest_candidate = attest_candidate
 
+    def resume_count_triggered_processing(self) -> None:
+        """Re-check persisted count thresholds for every known Scope after startup."""
+
+        if self._scope_ids is None:
+            return
+
+        async def _scan() -> None:
+            try:
+                scope_ids = await self._scope_ids()
+            except Exception as error:
+                log_safely(
+                    logger,
+                    logging.WARNING,
+                    "Count-trigger scope scan failed",
+                    exc_info=error,
+                    extra={"event": "count_trigger.scan_failed", "outcome": "failure", "unit": "background"},
+                )
+                return
+            for scope_id in scope_ids:
+                if self._closing or self._closed:
+                    return
+                try:
+                    await self._count_trigger_after_capture(scope_id)
+                except Exception as error:
+                    log_safely(
+                        logger,
+                        logging.WARNING,
+                        "Count-trigger resume failed for one Scope",
+                        exc_info=error,
+                        extra={"event": "count_trigger.resume_failed", "outcome": "failure", "unit": "background"},
+                    )
+
+        task = asyncio.create_task(_scan())
+        self._count_trigger_tasks.add(task)
+        task.add_done_callback(self._count_trigger_tasks.discard)
+
+    async def _count_trigger_after_capture(self, scope_id: str) -> None:
+        """Run one count-threshold admission pass for a Scope after its journal grows."""
+
+        if self._closing or self._closed:
+            return
+        if self.memory_source_count_threshold is None and self.topic_memory_source_count_threshold is None:
+            return
+        try:
+            await self._run_count_trigger(scope_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            log_safely(
+                logger,
+                logging.WARNING,
+                "Count-trigger processing failed",
+                exc_info=error,
+                extra={"event": "count_trigger.processing_failed", "outcome": "failure", "unit": "background"},
+            )
+
+    async def _run_count_trigger(self, scope_id: str) -> None:
+        records = self._record_service
+        if records is None or not hasattr(records, "source_pending_count"):
+            return
+        memory_threshold = self.memory_source_count_threshold
+        if memory_threshold is not None:
+            while not self._closing and not self._closed:
+                pending = await records.source_pending_count(scope_id, SOURCE_WINDOW_TRIGGER_NAME)
+                if pending < memory_threshold:
+                    break
+                result = await self.memory.for_scope(scope_id).flush()
+                if not result.source_count:
+                    break
+        topic_threshold = self.topic_memory_source_count_threshold
+        if (
+            topic_threshold is not None
+            and self._topic_memory_processing_available
+            and self._topic_memory_flush is not None
+        ):
+            pending = await records.source_pending_count(scope_id, TOPIC_MEMORY_SOURCE_WINDOW_BINDING)
+            if pending >= topic_threshold:
+                async with self._scoped_operation(scope_id), self._locked(scope_id):
+                    accepted = await self._topic_memory_flush(scope_id)
+                if accepted and self.artifact_processing_supervisor is not None:
+                    self.artifact_processing_supervisor.wake(TOPIC_MEMORY_SOURCE_WINDOW_BINDING)
+
     async def close(self) -> None:
         """Stop accepting work and await in-flight operations without closing the provider."""
 
         async with self._close_lock:
             if self._closed:
                 return
+            for task in tuple(self._count_trigger_tasks):
+                task.cancel()
             if self._scheduler is not None and self._scheduler.running:
                 self._scheduler.pause()
             async with self._lifecycle:

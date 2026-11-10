@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from itertools import chain
@@ -106,6 +107,17 @@ class PreparedContextBuild:
     origins: tuple[PreparedContextOrigin, ...]
     omissions: PreparedContextOmissions = PreparedContextOmissions()
     code_origins: tuple[CodeEvidenceRef, ...] = ()
+    fragments: tuple[PreparedContextFragment, ...] = ()
+
+
+@dataclass(frozen=True)
+class PreparedContextFragment:
+    """One literal source fragment selected from one Memory entry version."""
+
+    address: MemoryEntryAddress
+    start: int
+    end: int
+    text: str
 
 
 @dataclass(frozen=True)
@@ -234,6 +246,13 @@ class PreparedContextBuilder:
             raise PreparedContextInvariantError("topic-memory-candidate-limit")
         if sum(len(candidates.hits) for candidates in experience_candidates) > self.experience_candidate_limit:
             raise PreparedContextInvariantError("experience-candidate-limit")
+
+        if request.evidence_selection:
+            return self._build_fragments(
+                request=request,
+                current_scope_id=current_scope_id,
+                memory_candidates=memory_candidates,
+            )
 
         content, origins, omissions = self._select_entries(
             request=request,
@@ -609,6 +628,59 @@ class PreparedContextBuilder:
             dropped_no_fitting_truncation=dropped_no_fitting_truncation,
         )
 
+    def _build_fragments(
+        self,
+        *,
+        request: PrepareContextRequest,
+        current_scope_id: str | None,
+        memory_candidates: Sequence[PreparedMemoryCandidates],
+    ) -> PreparedContextBuild:
+        """Select query-relevant literal fragments from Memory candidates under the byte budget."""
+
+        candidates = _fragment_candidates(memory_candidates, current_scope_id)
+        sentences = _sentence_candidates(candidates, request.query)
+        selected = _select_fragments(sentences, request.max_bytes)
+        fragments: list[PreparedContextFragment] = []
+        origins: list[PreparedContextOrigin] = []
+        items: list[dict[str, object]] = []
+        for sentence in selected:
+            fragment = PreparedContextFragment(
+                address=sentence.entry.address,
+                start=sentence.start,
+                end=sentence.end,
+                text=sentence.text,
+            )
+            fragments.append(fragment)
+            origins.append(sentence.entry.origin)
+            items.append(
+                {
+                    "citation": {
+                        "scope_id": sentence.entry.address.memory.scope_id,
+                        "memory_ref": sentence.entry.memory_ref_json,
+                        "entry_id": sentence.entry.address.entry_id,
+                        "entry_version_id": sentence.entry.address.entry_version_id,
+                    },
+                    "content": sentence.text,
+                    "start": sentence.start,
+                    "end": sentence.end,
+                }
+            )
+        if not fragments:
+            return PreparedContextBuild(
+                context=self.empty(),
+                origins=(),
+                fragments=(),
+            )
+        content = _render_fragment_items(items)
+        content_bytes = len(content.encode("utf-8"))
+        if content_bytes > request.max_bytes:
+            raise PreparedContextInvariantError("output-budget")
+        return PreparedContextBuild(
+            context=PreparedContext(status="ready", content=content, content_bytes=content_bytes),
+            origins=tuple(origins),
+            fragments=tuple(fragments),
+        )
+
     def _fit_entry(
         self,
         entries: Sequence[_PreparedContextEntry],
@@ -733,3 +805,220 @@ def _truncate_utf8(text: str, byte_budget: int) -> str:
     prefix_budget = byte_budget - len(_ELLIPSIS.encode("utf-8"))
     encoded_prefix = text.encode("utf-8")[:prefix_budget]
     return f"{encoded_prefix.decode('utf-8', errors='ignore')}{_ELLIPSIS}"
+
+
+@dataclass(frozen=True)
+class _CandidateEntry:
+    """One Memory candidate entry prepared for fragment selection."""
+
+    address: MemoryEntryAddress
+    origin: PreparedContextOrigin
+    memory_ref_json: dict[str, object]
+    text: str
+    order: int
+
+
+@dataclass(frozen=True)
+class _FragmentSentence:
+    """One candidate sentence span scored against the request query."""
+
+    entry: _CandidateEntry
+    start: int
+    end: int
+    text: str
+    score: float
+
+
+def _fragment_candidates(
+    memory_candidates: Sequence[PreparedMemoryCandidates],
+    current_scope_id: str | None,
+) -> tuple[_CandidateEntry, ...]:
+    entries: list[_CandidateEntry] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    order = 0
+    for group in memory_candidates:
+        for hit in group.hits:
+            identity = (hit.memory_ref.artifact_id, str(hit.memory_ref.revision), hit.entry_id, hit.entry_version_id)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            if not hit.text.strip():
+                continue
+            scope_id = group.scope_id or current_scope_id or ""
+            address = MemoryEntryAddress(
+                memory=ArtifactAddress(scope_id=scope_id, artifact=hit.memory_ref),
+                entry_id=hit.entry_id,
+                entry_version_id=hit.entry_version_id,
+            )
+            if current_scope_id is not None and scope_id == current_scope_id:
+                origin: PreparedContextOrigin = MemoryCitation(
+                    memory_ref=hit.memory_ref,
+                    entry_id=hit.entry_id,
+                    entry_version_id=hit.entry_version_id,
+                )
+            else:
+                origin = address
+            entries.append(
+                _CandidateEntry(
+                    address=address,
+                    origin=origin,
+                    memory_ref_json=hit.memory_ref.model_dump(mode="json"),
+                    text=hit.text,
+                    order=order,
+                )
+            )
+            order += 1
+    return tuple(entries)
+
+
+_SENTENCE_BOUNDARY = re.compile(r"[.!?。！？]+(?=\s|$)")
+_QUERY_TERM = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]")
+
+
+def _query_term_counts(query: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for term in _QUERY_TERM.findall(query.casefold()):
+        counts[term] = counts.get(term, 0) + 1
+    return counts
+
+
+def _sentence_spans(text: str) -> tuple[tuple[int, int], ...]:
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for match in _SENTENCE_BOUNDARY.finditer(text):
+        end = match.end()
+        spans.append((start, end))
+        nxt = end
+        while nxt < len(text) and text[nxt] in " \t\r\n":
+            nxt += 1
+        start = nxt
+    if start < len(text):
+        spans.append((start, len(text)))
+    return tuple(span for span in spans if text[span[0] : span[1]].strip())
+
+
+def _sentence_candidates(
+    entries: tuple[_CandidateEntry, ...],
+    query: str,
+) -> tuple[_FragmentSentence, ...]:
+    term_counts = _query_term_counts(query)
+    sentences: list[_FragmentSentence] = []
+    if not term_counts:
+        return ()
+    for entry in entries:
+        for start, end in _sentence_spans(entry.text):
+            sentence = entry.text[start:end]
+            folded = sentence.casefold()
+            distinct = 0
+            total = 0
+            for term in term_counts:
+                count = folded.count(term)
+                if count:
+                    distinct += 1
+                    total += count
+            if not distinct:
+                continue
+            sentences.append(
+                _FragmentSentence(
+                    entry=entry,
+                    start=start,
+                    end=end,
+                    text=sentence,
+                    score=distinct * 100.0 + min(float(total), 20.0),
+                )
+            )
+    return tuple(sentences)
+
+
+def _render_fragment_items(items: Sequence[dict[str, object]]) -> str:
+    envelope = {"trust": "untrusted_history", "items": list(items)}
+    encoded = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
+    return "\n\n".join((TRUST_POLICY, f"{_BEGIN_MARKER}\n{encoded}\n{_END_MARKER}"))
+
+
+def _fragment_items_for(sentences: Sequence[_FragmentSentence]) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for sentence in sentences:
+        items.append(
+            {
+                "citation": {
+                    "scope_id": sentence.entry.address.memory.scope_id,
+                    "memory_ref": sentence.entry.memory_ref_json,
+                    "entry_id": sentence.entry.address.entry_id,
+                    "entry_version_id": sentence.entry.address.entry_version_id,
+                },
+                "content": sentence.text,
+                "start": sentence.start,
+                "end": sentence.end,
+            }
+        )
+    return items
+
+
+def _merge_selected(sentences: Sequence[_FragmentSentence]) -> tuple[_FragmentSentence, ...]:
+    """Merge contiguous selected sentences of one entry into single literal spans."""
+
+    merged: list[_FragmentSentence] = []
+    for sentence in sorted(sentences, key=lambda item: (item.entry.order, item.start, item.end)):
+        if merged:
+            previous = merged[-1]
+            gap = previous.entry.text[previous.end : sentence.start]
+            if (
+                previous.entry.address == sentence.entry.address
+                and sentence.start >= previous.end
+                and not gap.strip()
+                and len(gap) <= 4
+            ):
+                merged[-1] = _FragmentSentence(
+                    entry=previous.entry,
+                    start=previous.start,
+                    end=sentence.end,
+                    text=previous.entry.text[previous.start : sentence.end],
+                    score=max(previous.score, sentence.score),
+                )
+                continue
+        merged.append(sentence)
+    return tuple(merged)
+
+
+def _select_fragments(sentences: tuple[_FragmentSentence, ...], max_bytes: int) -> tuple[_FragmentSentence, ...]:
+    """Greedily pick scored sentences, merging contiguous spans, until the budget is full."""
+
+    if not sentences:
+        return ()
+    ranked = sorted(
+        range(len(sentences)),
+        key=lambda index: (-sentences[index].score, sentences[index].entry.order, sentences[index].start),
+    )
+    chosen: list[int] = []
+    selected: set[int] = set()
+
+    def _fits(indices: Sequence[int]) -> bool:
+        merged = _merge_selected([sentences[position] for position in indices])
+        return len(_render_fragment_items(_fragment_items_for(merged)).encode("utf-8")) <= max_bytes
+
+    for _pass in range(8):
+        added = False
+        for index in ranked:
+            if index in selected:
+                continue
+            if _fits(chosen + [index]):
+                chosen.append(index)
+                selected.add(index)
+                added = True
+        if not added:
+            break
+    if not chosen:
+        return ()
+    merged = _merge_selected([sentences[position] for position in chosen])
+    # Report merged fragments best-first (by the strongest constituent's rank).
+    return tuple(
+        sorted(
+            merged,
+            key=lambda fragment: (
+                -fragment.score,
+                fragment.entry.order,
+                fragment.start,
+            ),
+        )
+    )

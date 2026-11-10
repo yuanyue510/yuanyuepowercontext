@@ -120,6 +120,21 @@ class RuntimeConfig(BaseModel):
         return normalized
 
     @field_validator(
+        "memory_source_count_threshold",
+        "topic_memory_source_count_threshold",
+        mode="before",
+    )
+    @classmethod
+    def validate_source_count_threshold(cls, value: Any) -> Any:
+        """Count thresholds are strictly optional positive integers (no bool/float/str/zero)."""
+
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("source count threshold must be None or a positive integer")  # noqa: TRY003
+        return value
+
+    @field_validator(
         "memory_max_workers",
         "topic_memory_max_workers",
         "experience_max_workers",
@@ -201,6 +216,8 @@ class RuntimeConfig(BaseModel):
 
     schedule_seconds: float | None = Field(default=None, gt=0)
     memory_schedule_seconds: float | None = Field(default=None, gt=0)
+    memory_source_count_threshold: int | None = None
+    topic_memory_source_count_threshold: int | None = None
     experience_schedule_seconds: float | None = Field(default=None, gt=0)
     dream_enabled: bool = True
     dream_max_pending_per_scope: int = Field(default=32, ge=1, le=1000)
