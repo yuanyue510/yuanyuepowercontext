@@ -42,7 +42,7 @@ class Config:
     # --- MiniMax ---
     minimax_api_key: str = ""
     minimax_base_url: str = "https://api.minimax.chat"
-    minimax_model: str = "MiniMax-M2"
+    minimax_model: str = "MiniMax-M3"
     minimax_group_id: str = ""
     minimax_embed_model: str = "embo-01"
 
