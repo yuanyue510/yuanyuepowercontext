@@ -170,11 +170,23 @@ class SeekDB:
         self.execute(DDL_ARTIFACT, database=self.cfg.db_name, note="ddl:artifact")
         self.execute(DDL_RUN, database=self.cfg.db_name, note="ddl:ingest_run")
 
-        # 全文索引：中文需要 ngram 分词，失败则尝试默认分词，再失败则放弃
+        # 全文索引：先看是否已存在（init-db 可重复执行，重复添加会报 Duplicate key name，
+        # 不能把它当成"没有全文检索能力"）
+        try:
+            _, idx_rows = self.execute("SHOW INDEX FROM artifact", database=self.cfg.db_name,
+                                       note="show:index")
+            if any(r.get("Key_name") == "ft_artifact_content" for r in idx_rows):
+                caps["fulltext"] = "existing"
+        except Exception as exc:  # noqa: BLE001
+            caps.setdefault("fulltext_errors", []).append(f"show index: {str(exc)[:120]}")
+
+        # 中文需要 ngram 分词，失败则尝试默认分词，再失败则放弃
         for ddl, label in (
             ("ALTER TABLE artifact ADD FULLTEXT INDEX ft_artifact_content (content) WITH PARSER ngram", "ngram"),
             ("ALTER TABLE artifact ADD FULLTEXT INDEX ft_artifact_content (content)", "default"),
         ):
+            if caps.get("fulltext"):
+                break
             try:
                 self.execute(ddl, database=self.cfg.db_name, note=f"ddl:fulltext:{label}")
                 caps["fulltext"] = label

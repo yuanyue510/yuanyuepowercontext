@@ -1,24 +1,24 @@
 === 1) 写入前：确认该任务在 PowerContext 中没有状态 ===
-[miss] PowerContext 中没有任务 T-STATE-REUSE-20261110160754 的状态记录
+[miss] PowerContext 中没有任务 T-STATE-REUSE-20261110161433 的状态记录
 state-show 退出码: 1（1 = 确实为空状态，符合预期）
 
 === 2) 保存任务进度（context 已构成、基线测试已跑）===
-PowerContext scope=scp_168rh1aewbhnqzgxfcreb7enzv 已保存任务状态: T-STATE-REUSE-20261110160754
-{"changed": true, "records": [{"artifact": {"family": "atomic-memory", "artifact_id": "art_2d0f0b183b284b3098bad01b3ca1f1ef", "revision": 1}, "kind": "sdd_task_state", "text": "[SDD-STATE] {\"task_id\": \"T-STATE-REUSE-20261110160754\", \"stage\": \"context_ready\", \"completed\": [\"导入规格/代码/测试共 46 个工件\", \"构造任务上下文 context.json\", \"记录修改前基线测试结果\"], \"todo\": [\"调用 MiniMax 生成并应用补丁\", \"运行目标测试与回归测试\
+PowerContext scope=scp_168rh1aewbhnqzgxfcreb7enzv 已保存任务状态: T-STATE-REUSE-20261110161433
+{"changed": true, "records": [{"artifact": {"family": "atomic-memory", "artifact_id": "art_17dcdb505374403eaaff759a8f56737e", "revision": 1}, "kind": "sdd_task_state", "text": "[SDD-STATE] {\"task_id\": \"T-STATE-REUSE-20261110161433\", \"stage\": \"context_ready\", \"completed\": [\"导入规格/代码/测试共 46 个工件\", \"构造任务上下文 context.json\", \"记录修改前基线测试结果\"], \"todo\": [\"调用 MiniMax 生成并应用补丁\", \"运行目标测试与回归测试\
 state-save 退出码: 0
 
 === 3) 重启上下文模块（PowerContext 服务停止 + 重新启动）===
-停止旧进程 pid=12395
+停止旧进程 pid=12941
 已重新启动 PowerContext，等待就绪...
 服务就绪（第 5 次探测）
-新进程 pid=12941（与旧进程不同即证明是重启后的新进程）
+新进程 pid=13781（与旧进程不同即证明是重启后的新进程）
 
 === 4) 重启后读取该状态 ===
 [hit] scope=scp_168rh1aewbhnqzgxfcreb7enzv
-任务: T-STATE-REUSE-20261110160754
+任务: T-STATE-REUSE-20261110161433
 阶段: context_ready
-更新时间: 2026-11-10T08:07:54.901338+00:00
-上下文指纹: aefd4140dfa8adfa
+更新时间: 2026-11-10T08:14:33.896097+00:00
+上下文指纹: b183a9f5a759331b
 已完成:
   ✓ 导入规格/代码/测试共 46 个工件
   ✓ 构造任务上下文 context.json

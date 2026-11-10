@@ -7,13 +7,13 @@ seekdb ok: 5.7.25-OceanBase seekdb-v1.4.0.0
 
 [1m==== 1/8 初始化 seekdb 结构与索引 ====[0m
 seekdb: 127.0.0.1:2881  database=sdd_context
-schema ready, capabilities={"vector_index": true, "fulltext": false, "fulltext_errors": ["ngram: (1061, \"Duplicate key name 'ft_artifact_content'\")", "default: (1061, \"Duplicate key name 'ft_artifact_content'\")"]}
+schema ready, capabilities={"vector_index": true, "fulltext": "existing"}
 artifacts=46 embeddings=46
 [32m[PASS][0m seekdb schema 就绪
 
 [1m==== 2/8 导入规格 / 代码 / 测试 ====[0m
 {
-  "run_id": "run-20261110T080702Z",
+  "run_id": "run-20261110T081413Z",
   "spec": 8,
   "code": 19,
   "test": 19,
@@ -36,7 +36,7 @@ artifacts=46 embeddings=46
 [1m==== 3/8 为任务构造上下文 ====[0m
 ==============================================================================
 任务: 为订单查询增加状态过滤与最低金额过滤，并修复金额汇总的浮点误差
-上下文指纹: aefd4140dfa8adfa   候选工件: 23   检索方式: fulltext
+上下文指纹: b183a9f5a759331b   候选工件: 23   检索方式: fulltext
 ==============================================================================
 
 [适用规格]
@@ -83,7 +83,7 @@ artifacts=46 embeddings=46
   · [regression] tests/test_regression.py::test_total_cents_round_amounts_still_exact ['ORDER-REQ-007']
 
 [任务进展]（来自 PowerContext）
-  阶段: verified   更新时间: 2026-11-10T08:04:07.472944+00:00
+  阶段: verified   更新时间: 2026-11-10T08:07:39.027924+00:00
   ✓ 导入 specs/code/tests 到 seekdb
   ✓ 构造任务上下文（规格 ORDER-REQ-004/005/007）
   ✓ MiniMax 生成补丁并应用
@@ -118,17 +118,16 @@ FAILED tests/test_query_target.py::test_filter_preserves_insert_order - Asser...
 [1m==== 5/8 MiniMax 依据上下文修改代码 ====[0m
 [minimax] model=MiniMax-M3 base=https://api.minimax.chat prompt_chars=12214 max_attempts=3
 [minimax] 第 1 次调用，prompt_chars=12214
-[minimax] style=chatcompletion_v2 elapsed=35321.4ms usage={'total_tokens': 9389, 'total_characters': 0, 'prompt_tokens': 3835, 'completion_tokens': 5554, 'completion_tokens_details': {'reasoning_tokens': 4917}, 'prompt_tokens_details': {'cached_tokens': 3833}}
-[patch] 应用成功: python-applier: ordersvc/service.py: 3 个 hunk
+[minimax] style=chatcompletion_v2 elapsed=9832.3ms usage={'total_tokens': 5174, 'total_characters': 0, 'prompt_tokens': 3835, 'completion_tokens': 1339, 'completion_tokens_details': {'reasoning_tokens': 873}, 'prompt_tokens_details': {'cached_tokens': 1022}}
+[patch] 应用成功: python-applier: ordersvc/service.py: 2 个 hunk
 [verify] 自检通过（attempt 1）
 [32m[PASS][0m 补丁已应用
 修改后代码快照: records/snapshot_after_service.py
 --- patch 摘要 ---
 --- a/ordersvc/service.py
 +++ b/ordersvc/service.py
-@@ -26,16 +26,24 @@ class OrderService:
-@@ -47,12 +55,12 @@ class OrderService:
-@@ -61,10 +69,12 @@ class OrderService:
+@@ -31,13 +31,25 @@ class OrderService:
+@@ -49,13 +61,13 @@ class OrderService:
 
 [1m==== 6/8 修改后测试（目标 + 回归，应全部通过） ====[0m
 pytest exit=0
@@ -145,8 +144,8 @@ state saved: scope=scp_168rh1aewbhnqzgxfcreb7enzv task=T-ORDER-FILTER
 [hit] scope=scp_168rh1aewbhnqzgxfcreb7enzv
 任务: T-ORDER-FILTER
 阶段: verified
-更新时间: 2026-11-10T08:07:39.027924+00:00
-上下文指纹: aefd4140dfa8adfa
+更新时间: 2026-11-10T08:14:24.316123+00:00
+上下文指纹: b183a9f5a759331b
 已完成:
   ✓ 导入 specs/code/tests 到 seekdb
   ✓ 构造任务上下文（规格 ORDER-REQ-004/005/007）
@@ -160,7 +159,7 @@ state saved: scope=scp_168rh1aewbhnqzgxfcreb7enzv task=T-ORDER-FILTER
 证据 Source: sdd-evidence-T-ORDER-FILTER-after-tests
 [32m[PASS][0m 重启后成功读取状态
 [任务进展]（来自 PowerContext）
-  阶段: verified   更新时间: 2026-11-10T08:07:39.027924+00:00
+  阶段: verified   更新时间: 2026-11-10T08:14:24.316123+00:00
   ✓ 导入 specs/code/tests 到 seekdb
   ✓ 构造任务上下文（规格 ORDER-REQ-004/005/007）
   ✓ MiniMax 生成补丁并应用
@@ -172,4 +171,4 @@ task_state 已并入上下文: True | stage = verified | completed = 4 | verific
 [32m[PASS][0m 上下文已使用保存的任务状态（阶段/已完成/验证结果）
 
 [1m==== 结果 ====[0m
-[32m全部步骤通过[0m  日志: records/verify_20261110T160702.log
+[32m全部步骤通过[0m  日志: records/verify_20261110T161413.log

@@ -24,17 +24,17 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 时间 | 2026-11-10T08:04:07Z |
+| 时间 | 2026-11-10T08:14:23Z |
 | 任务 | 为订单查询增加状态过滤与最低金额过滤，并修复金额汇总的浮点误差 |
-| 上下文指纹 | `aefd4140dfa8adfa` |
+| 上下文指纹 | `b183a9f5a759331b`（与排序无关：只由选中工件及其版本决定） |
 | 提交给模型的规格 | ORDER-REQ-005 / 007 / 008 / 003 / 004 |
 | prompt 字符数 | 12214 |
-| prompt tokens | 3835 |
-| completion tokens | 4880（其中 thinking 4255） |
-| 总 tokens | 8715 |
-| 耗时 | 35118.1 ms |
-| 产出补丁字符数 | 2549 |
-| 应用结果 | `python-applier: ordersvc/service.py: 3 个 hunk` |
+| prompt tokens | 3835（其中缓存命中 1022） |
+| completion tokens | 1339（其中 thinking 873） |
+| 总 tokens | 5174 |
+| 耗时 | 9832.3 ms |
+| 产出补丁字符数 | 1866 |
+| 应用结果 | `python-applier: ordersvc/service.py: 2 个 hunk` |
 | 自检结果 | `pytest tests -q` → exit 0 |
 
 对应证据文件：
@@ -47,12 +47,14 @@
 
 ### 1.3 模型实际改了什么
 
-`records/patch.diff` 共 3 个 hunk，全部落在 `ordersvc/service.py`：
+`records/patch.diff` 共 2 个 hunk，全部落在 `ordersvc/service.py`：
 
 1. `list_orders`：补上 `status` 多值筛选（按逗号切分、去空白、并集、非法值抛 `ValueError`）与
    `min_amount` 闭区间下界筛选；
-2. `total_cents`：把 `float` 累加改为 `Decimal` 累加，`int(total * Decimal("100"))` 精确到分；
-3. `refund`：补一条未支付/已退款之外的兜底校验（不影响既有行为）。
+2. `total_cents`：把 `float` 累加改为 `Decimal` 累加，`int(total * Decimal("100"))` 精确到分。
+
+同一任务不同轮次的补丁细节会略有差异（例如另一次运行还顺手在 `refund` 里补了一条兜底校验），
+但都满足规格且 19 个用例全绿——题面明确不要求模型重新生成完全相同的补丁。
 
 修改后文件与「基线 + patch.diff」逐字节一致（见 `docs/VERIFICATION.md` 的等价性校验），
 说明最终产物完全来自这份补丁，没有人工手改。
@@ -99,7 +101,7 @@
 `scripts/spec_update_demo.sh` 把 ORDER-REQ-005 的「大于等于」改成「严格大于」，重新 `ingest` 后：
 
 - 上下文正文随之改变
-- 上下文指纹由 `aefd4140dfa8adfa` 变为 `335eb9cd456d8529`
+- 上下文指纹由 `b183a9f5a759331b` 变为 `0abf579e4d1c2d88`
 - 对比快照：`records/spec_before.json` / `records/spec_after.json`
 
 ---
@@ -123,7 +125,7 @@
  "todo": [],
  "verifications": [{"name": "before", "exit_code": 1, "passed": 11, "failed": 8},
                    {"name": "after",  "exit_code": 0, "passed": 19, "failed": 0}],
- "context_fingerprint": "fdaa66886c655cfd",
+ "context_fingerprint": "b183a9f5a759331b",
  "evidence_source_id": "sdd-evidence-T-ORDER-FILTER-after-tests"}
 ```
 

@@ -2,31 +2,31 @@ FFFFFFFF...........                                                      [100%]
 =================================== FAILURES ===================================
 _________________ test_total_cents_no_truncation_small_amounts _________________
 
-service = <ordersvc.service.OrderService object at 0x7f798064ce50>
+service = <ordersvc.service.OrderService object at 0x7fc5da4f6f10>
 
     def test_total_cents_no_truncation_small_amounts(service):
         """ORDER-REQ-007：0.01 + 2.00 必须精确等于 201 分。"""
 >       assert service.total_cents(["O1002", "O1006"]) == 201
 E       AssertionError: assert 200 == 201
 E        +  where 200 = total_cents(['O1002', 'O1006'])
-E        +    where total_cents = <ordersvc.service.OrderService object at 0x7f798064ce50>.total_cents
+E        +    where total_cents = <ordersvc.service.OrderService object at 0x7fc5da4f6f10>.total_cents
 
 tests/test_money_target.py:12: AssertionError
 ___________________ test_total_cents_no_truncation_odd_cents ___________________
 
-service = <ordersvc.service.OrderService object at 0x7f798066a410>
+service = <ordersvc.service.OrderService object at 0x7fc5da511a10>
 
     def test_total_cents_no_truncation_odd_cents(service):
         """ORDER-REQ-007：0.01 + 1.13 必须精确等于 114 分。"""
 >       assert service.total_cents(["O1002", "O1007"]) == 114
 E       AssertionError: assert 113 == 114
 E        +  where 113 = total_cents(['O1002', 'O1007'])
-E        +    where total_cents = <ordersvc.service.OrderService object at 0x7f798066a410>.total_cents
+E        +    where total_cents = <ordersvc.service.OrderService object at 0x7fc5da511a10>.total_cents
 
 tests/test_money_target.py:17: AssertionError
 _________________________ test_filter_by_status_single _________________________
 
-service = <ordersvc.service.OrderService object at 0x7f7980633790>
+service = <ordersvc.service.OrderService object at 0x7fc5da501810>
 
     def test_filter_by_status_single(service):
         """ORDER-REQ-004：status 单值过滤，只返回该状态的订单。"""
@@ -44,7 +44,7 @@ E         Use -v to get more diff
 tests/test_query_target.py:17: AssertionError
 _________________________ test_filter_by_status_multi __________________________
 
-service = <ordersvc.service.OrderService object at 0x7f7980629a10>
+service = <ordersvc.service.OrderService object at 0x7fc5da4e9bd0>
 
     def test_filter_by_status_multi(service):
         """ORDER-REQ-004：status 支持逗号分隔多值。"""
@@ -53,17 +53,17 @@ service = <ordersvc.service.OrderService object at 0x7f7980629a10>
 E       AssertionError: assert {'O1001', 'O1... 'O1006', ...} == {'O1002', 'O1005', 'O1006'}
 E         
 E         Extra items in the left set:
+E         'O1001'
+E         'O1008'
 E         'O1003'
 E         'O1007'
 E         'O1004'
-E         'O1008'
-E         'O1001'
 E         Use -v to get more diff
 
 tests/test_query_target.py:24: AssertionError
 _____________________ test_filter_by_status_unknown_raises _____________________
 
-service = <ordersvc.service.OrderService object at 0x7f798060bdd0>
+service = <ordersvc.service.OrderService object at 0x7fc5da4d27d0>
 
     def test_filter_by_status_unknown_raises(service):
         """ORDER-REQ-004：非法状态值必须抛 ValueError。"""
@@ -75,7 +75,7 @@ E       Failed: DID NOT RAISE <class 'ValueError'>
 tests/test_query_target.py:31: Failed
 _____________________ test_filter_by_min_amount_inclusive ______________________
 
-service = <ordersvc.service.OrderService object at 0x7f7980675a90>
+service = <ordersvc.service.OrderService object at 0x7fc5da521a90>
 
     def test_filter_by_min_amount_inclusive(service):
         """ORDER-REQ-005：min_amount 为闭区间下界（>=）。"""
@@ -84,17 +84,17 @@ service = <ordersvc.service.OrderService object at 0x7f7980675a90>
 E       AssertionError: assert {'O1001', 'O1... 'O1006', ...} == {'O1003', 'O1004', 'O1008'}
 E         
 E         Extra items in the left set:
-E         'O1006'
-E         'O1007'
-E         'O1002'
 E         'O1001'
+E         'O1006'
+E         'O1002'
+E         'O1007'
 E         'O1005'
 E         Use -v to get more diff
 
 tests/test_query_target.py:38: AssertionError
 ___________________ test_filter_combines_customer_and_status ___________________
 
-service = <ordersvc.service.OrderService object at 0x7f7980676c50>
+service = <ordersvc.service.OrderService object at 0x7fc5da511cd0>
 
     def test_filter_combines_customer_and_status(service):
         """ORDER-REQ-004/001：条件之间取交集。"""
@@ -110,7 +110,7 @@ E         Use -v to get more diff
 tests/test_query_target.py:44: AssertionError
 ______________________ test_filter_preserves_insert_order ______________________
 
-service = <ordersvc.service.OrderService object at 0x7f79805f6510>
+service = <ordersvc.service.OrderService object at 0x7fc5da4d0590>
 
     def test_filter_preserves_insert_order(service):
         """ORDER-REQ-006：过滤后仍需保持原有顺序。"""

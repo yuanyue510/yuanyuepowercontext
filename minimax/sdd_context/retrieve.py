@@ -278,9 +278,13 @@ def build_context(task: str, cfg: Config, db: SeekDB, top_k: int = 20) -> Contex
         "test_rows": len(tests),
         "embed_model": embedder.name,
     }
-    fingerprint_src = "|".join(
-        f"{s['id']}:{s['revision']}" for s in specs
-    ) + "|" + "|".join(f"{c['artifact_id']}:{c['revision']}" for c in code)
+    # 指纹只由"选中了哪些工件 + 各自版本"决定，与排序无关：
+    # 全文检索的 bm25 打分依赖索引统计，库重建后同一份资料可能产生细微排序差异，
+    # 若把顺序算进指纹，会让"资料没变但指纹变了"的假阳性出现。
+    fingerprint_src = "|".join(sorted(
+        [f"spec:{s['id']}:{s['revision']}" for s in specs]
+        + [f"code:{c['artifact_id']}:{c['revision']}" for c in code]
+    ))
     bundle.fingerprint = hashlib.sha256(fingerprint_src.encode("utf-8")).hexdigest()[:16]
     return bundle
 

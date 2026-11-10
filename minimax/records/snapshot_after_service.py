@@ -32,8 +32,8 @@ class OrderService:
         """按条件列出订单。
 
         customer_id: 精确匹配客户。
-        status:      订单状态筛选，支持逗号分隔的多值（ORDER-REQ-004）。
-        min_amount:  金额下限筛选，包含下界（ORDER-REQ-005）。
+        status:      订单状态筛选，支持单值或逗号分隔的多值。
+        min_amount:  金额下限筛选，包含等于下限的订单。
         """
         orders: Sequence[Order] = self.repository.all()
         if customer_id is not None:
@@ -41,8 +41,11 @@ class OrderService:
         if status is not None:
             valid_statuses = {"created", "paid", "shipped", "cancelled"}
             requested_statuses = {value.strip() for value in status.split(",")}
-            if not requested_statuses or not requested_statuses.issubset(valid_statuses):
-                raise ValueError(f"unknown order status: {status}")
+            invalid_statuses = requested_statuses - valid_statuses
+            if invalid_statuses:
+                raise ValueError(
+                    f"invalid order status: {', '.join(sorted(invalid_statuses))}"
+                )
             orders = [order for order in orders if order.status in requested_statuses]
         if min_amount is not None:
             orders = [order for order in orders if order.amount >= min_amount]
@@ -63,7 +66,7 @@ class OrderService:
             if order.status == "cancelled":
                 continue
             total += order.amount
-        return int(total * 100)
+        return int(total * Decimal("100"))
 
     # ------------------------------------------------------------------ 退款
     def refund(self, order_id: str) -> Order:
@@ -73,8 +76,6 @@ class OrderService:
             raise ValueError(f"order already cancelled: {order_id}")
         if order.status == "created":
             raise ValueError(f"unpaid order cannot be refunded: {order_id}")
-        if order.status not in ("paid", "shipped"):
-            raise ValueError(f"order cannot be refunded: {order_id}")
         refunded = replace(order, status="cancelled")
         self.repository.save(refunded)
         return refunded

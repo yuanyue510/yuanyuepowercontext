@@ -100,7 +100,7 @@ python -m sdd_context state-show --task-id T-ORDER-FILTER # 新进程读回状�
 | --- | --- |
 | `init-db` | `capabilities={"vector_index": true, "fulltext": "ngram"}` |
 | `ingest` | 46 个工件（8 规格 / 19 代码 / 19 测试） |
-| `context` | 5 条规格、13 个代码符号、19 条测试；含 `context_fingerprint`（本机为 `aefd4140dfa8adfa`，同输入可复现） |
+| `context` | 5 条规格、13 个代码符号、19 条测试；含 `context_fingerprint`（本机为 `b183a9f5a759331b`；只由选中工件与版本决定，同一份资料可复现） |
 | 修改前 `pytest` | `8 failed, 11 passed`，失败全部落在 `test_query_target.py` / `test_money_target.py` |
 | MiniMax 补丁 | 只改 `ordersvc/service.py`；测试文件哈希前后一致 |
 | 修改后 `pytest` | `19 passed` |
@@ -113,7 +113,7 @@ python -m sdd_context state-show --task-id T-ORDER-FILTER # 新进程读回状�
 | 验收关注点 | 实测 | 证据 |
 | --- | --- | --- |
 | 能够运行 | `init-db` / `ingest` / `context` / 测试 / MiniMax / 状态全部通过，无手工干预 | `records/verify_*.log` |
-| MiniMax 实际参与 | MiniMax-M3，prompt 3835 tokens，completion 4880 tokens，产出 3 个 hunk | `records/minimax_log.jsonl`、`records/minimax_response.txt` |
+| MiniMax 实际参与 | MiniMax-M3，prompt 3835 tokens，completion 1339 tokens，产出 2 个 hunk | `records/minimax_log.jsonl`、`records/minimax_response.txt` |
 | 上下文正确 | 5 条规格 + 13 个代码符号 + 19 条测试，均带 `文件:行号` | `records/context.json` |
 | 数据库实际参与 | 一次 context 触发 202 条 SQL（向量检索 + ngram 全文检索 + 关系扩展） | `records/db_query_log.jsonl` |
 | 状态能够复用 | 保存后新进程读回；再构造上下文时并入「阶段/已完成/验证结果」；另有服务重启版演示 | `records/09_context_with_state.log`、`records/08_state_reuse.log` |

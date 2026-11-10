@@ -9,7 +9,7 @@ exit=1
 
 == 2) 重放补丁 records/patch.diff
 涉及文件: ['ordersvc/service.py']
-应用结果: True | ordersvc/service.py: 3 个 hunk
+应用结果: True | ordersvc/service.py: 2 个 hunk
 
 == 3) 修改后测试（应全部通过）
 ...................                                                      [100%]
