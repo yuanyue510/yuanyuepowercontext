@@ -23,7 +23,7 @@ AI 开发助手改代码时必须同时回答三个问题：**该守哪些规格
 
 | 技术 | 在流程中的实际作用 | 证据 |
 | --- | --- | --- |
-| **MiniMax** | 读取上下文模块产出的规格/代码/测试，生成可 `patch -p1` 的补丁，直接改掉 `ordersvc/service.py` | `records/minimax_log.jsonl`、`records/patch.diff`、`records/minimax_response.txt` |
+| **MiniMax** | 读取上下文模块产出的规格/代码/测试，生成 unified diff，由内置应用器落盘改掉 `ordersvc/service.py` | `records/minimax_log.jsonl`、`records/patch.diff`、`records/minimax_response.txt` |
 | **seekdb** | 存放 46 个工程工件（8 规格 / 19 代码符号 / 19 测试），建 `VECTOR(1024)` HNSW 索引与中文 ngram 全文索引；任务上下文的每条内容都来自库内查询 | `records/db_query_log.jsonl`、`sdd_context/db.py` |
 | **PowerContext** | 以 Memory 保存任务进展（阶段/已完成/待办/两次测试结果），以 Source 保存测试日志；模块重启后按任务号检索读回 | `records/powercontext_log.jsonl`、`python -m sdd_context state-show` |
 
@@ -36,11 +36,13 @@ minimax/
 │   ├── db.py              #   seekdb 访问层（建表、向量检索、全文检索）
 │   ├── ingest.py          #   规格(Markdown) / 代码(AST) / 测试(AST) 解析入库
 │   ├── retrieve.py        #   混合召回 + 关系扩展，产出 context
+│   ├── patchutil.py       #   纯 Python unified diff 应用器（不依赖 patch 命令）
+│   ├── state.py           #   任务状态模型（PowerContext Memory / Source）
 │   ├── embed.py           #   向量化后端（hash 默认 / MiniMax embo-01）
 │   └── pc_client.py       #   PowerContext HTTP 客户端
-├── agent/minimax_patch.py # 用 MiniMax 依据上下文改代码
+├── agent/minimax_patch.py # 用 MiniMax 依据上下文改代码（自带失败重试）
 ├── sample_project/        # 业务工程：订单服务 + 规格 + 测试（改造对象）
-├── scripts/               # setup / verify / reset / 规格变更演示
+├── scripts/               # setup / verify / reset / 规格变更演示 / 状态复用 / MiniMax 自检
 ├── docs/                  # DESIGN（一页技术说明）/ RUNBOOK / VERIFICATION
 └── records/               # 运行记录：MiniMax、SQL、PowerContext、测试日志
 ```
@@ -49,11 +51,13 @@ minimax/
 
 ```bash
 cd minimax
-cp .env.example .env          # 填 seekdb 连接、MINIMAX_API_KEY
-bash scripts/setup.sh         # 装 pymysql + pytest
+cp .env.example .env                  # 填 seekdb 连接、MINIMAX_API_KEY
+bash scripts/setup.sh                 # 装 pymysql + pytest
+bash scripts/check_minimax.sh         # 可选：先确认 Key / 模型 / 额度
 # 另一个终端：启动任务状态服务（无需模型 API）
 pip install "powercontext[cli,server]==1.5.1" && powercontext server run
-bash scripts/verify.sh        # 一键跑完 8 个步骤
+bash scripts/verify.sh                # 一键跑完 8 个步骤
+bash scripts/state_reuse_demo.sh      # 单独演示：状态写入 → 服务重启 → 读回
 ```
 
 完整依赖、配置项与已知限制见 [docs/RUNBOOK.md](docs/RUNBOOK.md)；

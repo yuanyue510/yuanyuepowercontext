@@ -52,7 +52,8 @@ $PY -m sdd_context ingest --root sample_project || { bad "ingest 失败"; exit 1
 ok "资料入库完成"
 
 hdr "3/8 为任务构造上下文"
-$PY -m sdd_context context --task "$TASK" --out records/context.json || { bad "context 失败"; exit 1; }
+$PY -m sdd_context context --task "$TASK" --out records/context.json \
+    --task-id "$TASK_ID" --scope-title "$SCOPE_TITLE" || { bad "context 失败"; exit 1; }
 if $PY - <<'PY'
 import json, sys
 ctx = json.load(open('records/context.json', encoding='utf-8'))
@@ -100,8 +101,10 @@ if [ -z "${MINIMAX_API_KEY:-}" ]; then
   bad "未设置 MINIMAX_API_KEY，跳过代码修改。设置后重跑即可。"
   exit 1
 fi
+# 带上 --verify-cmd：补丁应用后先自测，不通过就把报错回灌给模型重试（最多 3 次）
 $PY agent/minimax_patch.py --context records/context.json --project sample_project \
-    --out-patch records/patch.diff --apply || { bad "MiniMax 修改失败"; exit 1; }
+    --out-patch records/patch.diff --apply --max-attempts 3 \
+    --verify-cmd "$PY -m pytest tests -q" || { bad "MiniMax 修改失败"; exit 1; }
 ok "补丁已应用"
 cp -f sample_project/ordersvc/service.py records/snapshot_after_service.py
 echo "修改后代码快照: records/snapshot_after_service.py"
@@ -175,9 +178,26 @@ print(f'state saved: scope={pc.scope_id} task={task_id}')
 PY
 [ $? -eq 0 ] && ok "任务状态已写入 PowerContext" || bad "状态保存失败"
 
-hdr "8/8 新进程读回任务状态（验证状态复用）"
+hdr "8/8 新进程读回任务状态，并让上下文使用该状态"
 $PY -m sdd_context state-show --task-id "$TASK_ID" --scope-title "$SCOPE_TITLE"
-[ $? -eq 0 ] && ok "重启后成功读取状态" || bad "状态读取失败"
+if [ $? -eq 0 ]; then ok "重启后成功读取状态"; else bad "状态读取失败"; fi
+
+# 再构造一次上下文：这次应把已保存的进展并入输出（"读取并使用"）
+$PY -m sdd_context context --task "$TASK" --out records/context_with_state.json \
+    --task-id "$TASK_ID" --scope-title "$SCOPE_TITLE" > records/09_context_with_state.log 2>&1
+CTX_STATE_RC=$?
+sed -n '/\[任务进展\]/,/^$/p' records/09_context_with_state.log
+if $PY - <<'PY2'
+import json, sys
+ctx = json.load(open('records/context_with_state.json', encoding='utf-8'))
+st = ctx.get('task_state') or {}
+ok = bool(st.get('stage') and st.get('completed') and st.get('verifications'))
+print('task_state 已并入上下文:', ok, '| stage =', st.get('stage'),
+      '| completed =', len(st.get('completed') or []),
+      '| verifications =', [(v.get('name'), v.get('exit_code')) for v in (st.get('verifications') or [])])
+sys.exit(0 if ok else 1)
+PY2
+then ok "上下文已使用保存的任务状态（阶段/已完成/验证结果）"; else bad "上下文未使用已保存的状态"; fi
 
 hdr "结果"
 if [ "$FAIL" -eq 0 ]; then

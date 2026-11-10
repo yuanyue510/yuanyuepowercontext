@@ -166,17 +166,29 @@ def extract_patch(text: str) -> str:
 
 
 def apply_patch(project_dir: str, patch_text: str) -> Tuple[bool, str]:
+    """先用内置 Python 应用器（零依赖），失败再退回 patch / git apply。"""
+    from sdd_context.patchutil import apply_patch_text
+
+    ok, message = apply_patch_text(project_dir, patch_text)
+    if ok:
+        return True, "python-applier: " + message
+
+    notes = ["python-applier 失败: " + message]
     patch_file = os.path.join(project_dir, ".sdd_patch.diff")
     with open(patch_file, "w", encoding="utf-8") as fh:
         fh.write(patch_text)
     try:
         for cmd in (["patch", "-p1", "--forward", "--batch", "-i", ".sdd_patch.diff"],
-                    ["patch", "-p0", "--forward", "--batch", "-i", ".sdd_patch.diff"]):
-            proc = subprocess.run(cmd, cwd=project_dir, capture_output=True, text=True)
+                    ["git", "apply", "-p1", "--whitespace=nowarn", ".sdd_patch.diff"]):
+            try:
+                proc = subprocess.run(cmd, cwd=project_dir, capture_output=True, text=True)
+            except FileNotFoundError:
+                notes.append(f"{cmd[0]}: 未安装")
+                continue
             if proc.returncode == 0:
-                return True, proc.stdout.strip() or proc.stderr.strip()
-            last = proc.stdout + proc.stderr
-        return False, last
+                return True, f"{cmd[0]}: " + (proc.stdout.strip() or "ok")
+            notes.append(f"{cmd[0]}: {proc.stdout.strip() or proc.stderr.strip()}"[:300])
+        return False, " | ".join(notes)
     finally:
         if os.path.exists(patch_file):
             os.remove(patch_file)
@@ -189,84 +201,181 @@ def log_record(path: str, record: Dict[str, Any]) -> None:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def _snapshot(project_dir: str, files: List[str]) -> Dict[str, str]:
+    snap: Dict[str, str] = {}
+    for rel in files:
+        path = os.path.join(project_dir, rel)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                snap[rel] = fh.read()
+    return snap
+
+
+def _restore(project_dir: str, snap: Dict[str, str]) -> None:
+    for rel, text in snap.items():
+        with open(os.path.join(project_dir, rel), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+
+def _run(cmd: str, cwd: str) -> Tuple[int, str]:
+    proc = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+    return proc.returncode, ((proc.stdout or "") + (proc.stderr or "")).strip()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="用 MiniMax 依据上下文修改代码")
     parser.add_argument("--context", required=True, help="context.json 路径")
     parser.add_argument("--project", default=os.path.join(MINIMAX_DIR, "sample_project"))
     parser.add_argument("--out-patch", default=os.path.join(MINIMAX_DIR, "records", "patch.diff"))
     parser.add_argument("--apply", action="store_true", help="应用补丁到样例工程")
+    parser.add_argument("--verify-cmd", default="", help="应用后自检命令；失败则带上报错重试")
+    parser.add_argument("--max-attempts", type=int, default=3, help="最多尝试次数")
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--dry-run", action="store_true", help="只打印提示词，不调用模型")
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
     context = json.load(open(args.context, encoding="utf-8"))
-    prompt = build_prompt(context)
+    base_prompt = build_prompt(context)
 
     if args.dry_run:
-        print(prompt)
+        print(base_prompt)
         return 0
 
     if not cfg.minimax_api_key:
         print("[error] 未配置 MINIMAX_API_KEY，无法调用 MiniMax", file=sys.stderr)
         return 2
 
-    prompt_path = os.path.join(cfg.records_dir, "minimax_prompt.txt")
     os.makedirs(cfg.records_dir, exist_ok=True)
-    open(prompt_path, "w", encoding="utf-8").write(prompt)
+    prompt_path = os.path.join(cfg.records_dir, "minimax_prompt.txt")
+    with open(prompt_path, "w", encoding="utf-8") as fh:
+        fh.write(base_prompt)
 
+    log_path = os.path.join(cfg.records_dir, "minimax_log.jsonl")
     print(f"[minimax] model={cfg.minimax_model} base={cfg.minimax_base_url} "
-          f"prompt_chars={len(prompt)}")
-    result = call_minimax(cfg, prompt, temperature=args.temperature)
-    print(f"[minimax] style={result['style']} elapsed={result['elapsed_ms']}ms "
-          f"usage={result['usage']}")
+          f"prompt_chars={len(base_prompt)} max_attempts={args.max_attempts}")
 
-    patch = extract_patch(result["text"])
-    with open(os.path.join(cfg.records_dir, "minimax_response.txt"), "w", encoding="utf-8") as fh:
-        fh.write(result["text"])
+    feedback = ""
+    attempts: List[Dict[str, Any]] = []
 
-    record: Dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "task": context.get("task"),
-        "context_fingerprint": context.get("context_fingerprint"),
-        "spec_ids": [s["id"] for s in context.get("specs", [])],
-        "code_targets": [c["artifact_id"] for c in context.get("code", [])],
-        "model": cfg.minimax_model,
-        "api_style": result["style"],
-        "prompt_path": prompt_path,
-        "prompt_chars": len(prompt),
-        "usage": result["usage"],
-        "elapsed_ms": result["elapsed_ms"],
-        "patch_chars": len(patch),
-        "response_head": result["text"][:400],
-    }
+    for attempt in range(1, args.max_attempts + 1):
+        prompt = base_prompt + (("\n\n# 上一轮结果与修正要求\n" + feedback) if feedback else "")
+        print(f"[minimax] 第 {attempt} 次调用，prompt_chars={len(prompt)}")
+        try:
+            result = call_minimax(cfg, prompt, temperature=args.temperature)
+        except RuntimeError as exc:
+            record = {"ts": _now(), "attempt": attempt, "status": "call_failed",
+                      "error": str(exc)[:600], "model": cfg.minimax_model}
+            log_record(log_path, record)
+            print(f"[error] {exc}", file=sys.stderr)
+            return 5
 
-    if not patch:
-        record["status"] = "no_patch"
-        log_record(os.path.join(cfg.records_dir, "minimax_log.jsonl"), record)
-        print("[error] 模型回复中未找到 unified diff，原文见 records/minimax_response.txt",
-              file=sys.stderr)
-        return 3
+        print(f"[minimax] style={result['style']} elapsed={result['elapsed_ms']}ms "
+              f"usage={result['usage']}")
 
-    os.makedirs(os.path.dirname(args.out_patch) or ".", exist_ok=True)
-    with open(args.out_patch, "w", encoding="utf-8") as fh:
-        fh.write(patch)
-    record["patch_path"] = args.out_patch
+        resp_path = os.path.join(cfg.records_dir,
+                                 "minimax_response.txt" if attempt == 1
+                                 else f"minimax_response_{attempt}.txt")
+        with open(resp_path, "w", encoding="utf-8") as fh:
+            fh.write(result["text"])
 
-    if args.apply:
+        patch = extract_patch(result["text"])
+        record: Dict[str, Any] = {
+            "ts": _now(),
+            "attempt": attempt,
+            "task": context.get("task"),
+            "context_fingerprint": context.get("context_fingerprint"),
+            "spec_ids": [s["id"] for s in context.get("specs", [])],
+            "code_targets": [c["artifact_id"] for c in context.get("code", [])],
+            "model": cfg.minimax_model,
+            "api_style": result["style"],
+            "prompt_path": prompt_path,
+            "prompt_chars": len(prompt),
+            "usage": result["usage"],
+            "elapsed_ms": result["elapsed_ms"],
+            "patch_chars": len(patch),
+            "response_path": resp_path,
+            "response_head": result["text"][:600],
+        }
+
+        if not patch:
+            record["status"] = "no_patch"
+            attempts.append(record)
+            log_record(log_path, record)
+            feedback = ("你上一轮的回复里没有可以解析的 unified diff。"
+                        "请只输出补丁本身，形如：\n--- a/ordersvc/service.py\n"
+                        "+++ b/ordersvc/service.py\n@@ -12,7 +12,9 @@")
+            continue
+
+        with open(args.out_patch, "w", encoding="utf-8") as fh:
+            fh.write(patch)
+        record["patch_path"] = args.out_patch
+        record["patch"] = patch
+
+        if not args.apply:
+            record["status"] = "patch_saved"
+            attempts.append(record)
+            log_record(log_path, record)
+            print(f"[patch] 已保存到 {args.out_patch}")
+            return 0
+
+        from sdd_context.patchutil import changed_files
+        snap = _snapshot(args.project, changed_files(patch) or ["ordersvc/service.py"])
+
         ok, message = apply_patch(args.project, patch)
         record["applied"] = ok
         record["apply_message"] = message[:600]
-        record["status"] = "applied" if ok else "apply_failed"
-        log_record(os.path.join(cfg.records_dir, "minimax_log.jsonl"), record)
-        print(f"[patch] apply={'OK' if ok else 'FAILED'} {message[:300]}")
+
         if not ok:
-            return 4
-    else:
-        record["status"] = "patch_saved"
-        log_record(os.path.join(cfg.records_dir, "minimax_log.jsonl"), record)
-        print(f"[patch] 已保存到 {args.out_patch}")
-    return 0
+            _restore(args.project, snap)
+            record["status"] = "apply_failed"
+            attempts.append(record)
+            log_record(log_path, record)
+            print(f"[patch] 应用失败: {message[:200]}")
+            feedback = ("上一轮补丁应用失败：" + message[:400] +
+                        "\n请严格按照下面的当前代码原文重新生成补丁，"
+                        "上下文行必须逐字符一致。")
+            continue
+
+        print(f"[patch] 应用成功: {message[:200]}")
+
+        if not args.verify_cmd:
+            record["status"] = "applied"
+            attempts.append(record)
+            log_record(log_path, record)
+            return 0
+
+        rc, out = _run(args.verify_cmd, args.project)
+        record["verify_cmd"] = args.verify_cmd
+        record["verify_exit"] = rc
+        record["verify_tail"] = out[-1200:]
+        with open(os.path.join(cfg.records_dir, f"minimax_verify_attempt{attempt}.log"),
+                  "w", encoding="utf-8") as fh:
+            fh.write(out)
+
+        if rc == 0:
+            record["status"] = "verified"
+            attempts.append(record)
+            log_record(log_path, record)
+            print(f"[verify] 自检通过（attempt {attempt}）")
+            return 0
+
+        _restore(args.project, snap)
+        record["status"] = "verify_failed"
+        attempts.append(record)
+        log_record(log_path, record)
+        print(f"[verify] 自检失败 rc={rc}，已回滚本次修改")
+        feedback = ("上一轮补丁能应用，但自检命令 `" + args.verify_cmd +
+                    "` 失败，输出末尾如下：\n" + out[-1500:] +
+                    "\n请修正实现后重新输出完整补丁。")
+
+    print(f"[error] {args.max_attempts} 次尝试均未得到可用补丁，详见 {log_path}",
+          file=sys.stderr)
+    return 4
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from .config import Config
 from .db import SeekDB
+from .ingest import SOURCE_SEP
 from .embed import build_embedder, tokenize
 
 WEIGHT_VECTOR = 0.65
@@ -161,11 +162,11 @@ def build_context(task: str, cfg: Config, db: SeekDB, top_k: int = 20) -> Contex
         if not row:
             continue
         refs = _refs(row)
-        body = row["content"].split("\n\n", 1)[-1]
+        body = _slice_source(row["content"])
         sid = refs.get("spec_id") or row["symbol"]
         specs.append({
             "id": sid,
-            "title": row["title"],
+            "title": _strip_spec_prefix(row["title"], refs.get("spec_id") or row["symbol"]),
             "path": row["path"],
             "line": row["start_line"],
             "body": body,
@@ -285,8 +286,20 @@ def build_context(task: str, cfg: Config, db: SeekDB, top_k: int = 20) -> Contex
 
 
 def _slice_source(content: str) -> str:
-    """工件正文里"元信息块 + 源码"用空行分隔，取源码部分。"""
+    """取工件的源码/正文部分。
+
+    元信息与正文之间用 ingest.SOURCE_SEP 分隔；老数据（无分隔符）退回按空行切。
+    """
+    if SOURCE_SEP in content:
+        return content.split(SOURCE_SEP, 1)[1]
     return content.split("\n\n", 1)[-1]
+
+
+def _strip_spec_prefix(title: str, spec_id: str) -> str:
+    """title 形如 "ORDER-REQ-004 订单状态过滤"，展示时去掉重复的 ID。"""
+    if spec_id and title.startswith(spec_id):
+        return title[len(spec_id):].strip() or title
+    return title
 
 
 def _first_doc_line(source: str) -> str:

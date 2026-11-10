@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from .config import Config
 from .db import SeekDB
 from .ingest import ingest
-from .pc_client import PowerContext
+from .pc_client import PowerContext, PowerContextError
 from .retrieve import build_context
 from .state import TaskState, Verification, load_state, save_evidence, save_state
 
@@ -59,6 +59,22 @@ def cmd_context(args: argparse.Namespace, cfg: Config) -> int:
     bundle = build_context(args.task, cfg, db)
     payload = bundle.to_dict()
 
+    # 任务进展：给出 task-id 时从 PowerContext 读取已保存的状态并并入输出，
+    # 使上下文同时回答"该改什么""做到哪一步了""哪些验证已经做过"。
+    task_state = None
+    if args.task_id:
+        try:
+            pc = PowerContext(cfg)
+            pc.ensure_scope(title=args.scope_title,
+                            summary="SDD 上下文管理系统的任务状态")
+            state = load_state(pc, args.task_id)
+            if state is not None:
+                task_state = state.__dict__
+                payload["task_state"] = task_state
+                payload["task_state"]["_source"] = f"powercontext:{pc.scope_id}"
+        except PowerContextError as exc:
+            print(f"[warn] 读取 PowerContext 状态失败: {exc}", file=sys.stderr)
+
     out = args.out
     if out:
         os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
@@ -84,6 +100,20 @@ def cmd_context(args: argparse.Namespace, cfg: Config) -> int:
     print("\n[验证测试]")
     for t in bundle.tests:
         print(f"  · [{t['role']:<10}] {t['node_id']:<52} {t['covered_specs']}")
+    if args.task_id:
+        print("\n[任务进展]（来自 PowerContext）")
+        if task_state:
+            print(f"  阶段: {task_state.get('stage')}   更新时间: {task_state.get('updated_at')}")
+            for item in task_state.get("completed") or ["(无)"]:
+                print(f"  ✓ {item}")
+            for item in task_state.get("todo") or []:
+                print(f"  · {item}")
+            for v in task_state.get("verifications") or []:
+                mark = "PASS" if v.get("exit_code") == 0 else "FAIL"
+                print(f"  [{mark}] {v.get('name')} rc={v.get('exit_code')} "
+                      f"{v.get('passed')} passed / {v.get('failed')} failed")
+        else:
+            print("  (该任务尚无保存记录，本次为首轮)")
     if out:
         print(f"\n上下文已写入 {out}")
     if not bundle.specs:
@@ -163,6 +193,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--task", required=True)
     sp.add_argument("--out", default="")
     sp.add_argument("--render", action="store_true", help="打印给模型看的 Markdown")
+    sp.add_argument("--task-id", default="",
+                    help="给出任务号时，从 PowerContext 读取该任务已保存的进展并并入输出")
+    sp.add_argument("--scope-title", default="sdd-context-demo")
     sp.set_defaults(func=cmd_context)
 
     scope_args = ("--scope-title",)

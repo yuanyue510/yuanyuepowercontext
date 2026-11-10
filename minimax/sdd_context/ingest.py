@@ -23,6 +23,9 @@ from .embed import build_embedder
 SPEC_HEAD = re.compile(r"^###\s+([A-Z][A-Z0-9-]*-\d+)\s+(.+?)\s*$")
 META_LINE = re.compile(r"^-\s*([a-zA-Z_]+)\s*:\s*(.+)$")
 REQ_ID = re.compile(r"[A-Z][A-Z0-9-]*-\d+")
+# 元信息与正文之间的唯一分隔符。早先用空行分隔，会被 docstring/正文里的空行切错，
+# 导致交给模型的代码片段从中间开始、无法生成合法补丁。
+SOURCE_SEP = "\n\n@@@@ SOURCE @@@@\n\n"
 
 
 def _md5(text: str) -> str:
@@ -99,7 +102,7 @@ def parse_specs(spec_dir: str, root: str) -> List[Dict[str, Any]]:
             content = (
                 f"{spec_id} {title}\n"
                 f"applies_to: {', '.join(applies_to)}\n"
-                f"verifies: {', '.join(verifies)}\n{tags}\n\n{body}"
+                f"verifies: {', '.join(verifies)}\n{tags}{SOURCE_SEP}{body}"
             )
             items.append({
                 "artifact_id": f"spec:{spec_id}",
@@ -162,7 +165,7 @@ def parse_code(code_dir: str, root: str) -> List[Dict[str, Any]]:
                 body = _node_source(lines, node)
                 doc = ast.get_docstring(node) or ""
                 sig = _signature(node)
-                content = f"{rel} :: {qualname}\n{sig}\n{doc}\n\n{body}"
+                content = f"{rel} :: {qualname}\n{sig}\n{doc}{SOURCE_SEP}{body}"
                 items.append({
                     "artifact_id": f"code:{rel}#{qualname}",
                     "kind": "code",
@@ -181,7 +184,7 @@ def parse_code(code_dir: str, root: str) -> List[Dict[str, Any]]:
             module_doc = ast.get_docstring(tree) or ""
             if module_doc:
                 head = "\n".join(lines[:12])
-                content = f"{rel} (module)\n{module_doc}\n\n{head}"
+                content = f"{rel} (module)\n{module_doc}{SOURCE_SEP}{head}"
                 items.append({
                     "artifact_id": f"code:{rel}#module",
                     "kind": "code",
@@ -230,7 +233,8 @@ def parse_tests(test_dir: str, root: str) -> List[Dict[str, Any]]:
             doc = ast.get_docstring(node) or ""
             spec_ids = sorted(set(REQ_ID.findall(doc)))
             body = _node_source(lines, node)
-            content = f"{rel}::{node.name}\nrole={role}\nspecs={','.join(spec_ids)}\n{doc}\n\n{body}"
+            content = (f"{rel}::{node.name}\nrole={role}\nspecs={','.join(spec_ids)}\n"
+                       f"{doc}{SOURCE_SEP}{body}")
             items.append({
                 "artifact_id": f"test:{rel}::{node.name}",
                 "kind": "test",
