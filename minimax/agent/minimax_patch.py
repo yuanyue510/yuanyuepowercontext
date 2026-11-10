@@ -75,16 +75,50 @@ def build_prompt(context: Dict[str, Any]) -> str:
 
 
 # --------------------------------------------------------------------- 调用
-def call_minimax(cfg: Config, prompt: str, temperature: float = 0.1) -> Dict[str, Any]:
-    """调用 MiniMax 对话接口，兼容两种常见形态，返回 {text, usage, raw, style}。"""
-    styles = [os.environ.get("MINIMAX_API_STYLE", "auto")]
-    if styles[0] == "auto":
-        styles = ["chatcompletion_v2", "openai"]
+def _http_json(url: str, body: dict, headers: dict, timeout: int = 240):
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method="POST", headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
+
+def call_minimax(cfg: Config, prompt: str, temperature: float = 0.1) -> Dict[str, Any]:
+    """调用 MiniMax，兼容 chatcompletion_v2 / OpenAI 兼容 / Anthropic 兼容三种形态。
+
+    返回 {text, usage, raw, style, elapsed_ms, url}；全部失败时抛 RuntimeError。
+    """
+    style_opt = os.environ.get("MINIMAX_API_STYLE", "auto").strip().lower()
+    if style_opt in ("", "auto"):
+        # sk-cp- 是 Token Plan 订阅 Key，官方推荐 Anthropic 兼容端点，优先尝试
+        if cfg.minimax_api_key.startswith("sk-cp"):
+            styles = ["anthropic", "openai", "chatcompletion_v2"]
+        else:
+            styles = ["chatcompletion_v2", "openai", "anthropic"]
+    else:
+        styles = [style_opt]
+
+    base = cfg.minimax_base_url.rstrip("/")
+    auth = f"Bearer {cfg.minimax_api_key}"
     last_error: Optional[str] = None
+
     for style in styles:
-        if style == "chatcompletion_v2":
-            url = f"{cfg.minimax_base_url}/v1/text/chatcompletion_v2"
+        if style == "anthropic":
+            url = f"{base}/v1/messages" if base.endswith("/anthropic") else f"{base}/anthropic/v1/messages"
+            body = {
+                "model": cfg.minimax_model,
+                "max_tokens": 8192,
+                "temperature": temperature,
+                "system": SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": cfg.minimax_api_key,
+                "anthropic-version": "2023-06-01",
+                "Authorization": auth,
+            }
+        elif style == "chatcompletion_v2":
+            url = f"{base}/v1/text/chatcompletion_v2"
             if cfg.minimax_group_id:
                 url += f"?GroupId={cfg.minimax_group_id}"
             body = {
@@ -96,8 +130,9 @@ def call_minimax(cfg: Config, prompt: str, temperature: float = 0.1) -> Dict[str
                 "temperature": temperature,
                 "max_tokens": 8192,
             }
-        else:
-            url = f"{cfg.minimax_base_url}/v1/chat/completions"
+            headers = {"Content-Type": "application/json", "Authorization": auth}
+        else:                                  # openai
+            url = f"{base}/v1/chat/completions"
             body = {
                 "model": cfg.minimax_model,
                 "messages": [
@@ -107,19 +142,11 @@ def call_minimax(cfg: Config, prompt: str, temperature: float = 0.1) -> Dict[str
                 "temperature": temperature,
                 "max_tokens": 8192,
             }
+            headers = {"Content-Type": "application/json", "Authorization": auth}
 
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=data, method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {cfg.minimax_api_key}",
-            },
-        )
         started = time.time()
         try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
+            payload = _http_json(url, body, headers)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", "replace")[:400]
             last_error = f"{style}: HTTP {exc.code} {detail}"
@@ -127,25 +154,42 @@ def call_minimax(cfg: Config, prompt: str, temperature: float = 0.1) -> Dict[str
         except urllib.error.URLError as exc:
             last_error = f"{style}: {exc}"
             continue
-
-        if payload.get("base_resp", {}).get("status_code") not in (None, 0):
-            last_error = f"{style}: business error {payload.get('base_resp')}"
+        except json.JSONDecodeError as exc:
+            last_error = f"{style}: 响应不是 JSON（{exc}）"
             continue
 
-        choices = payload.get("choices") or []
-        if not choices:
-            last_error = f"{style}: empty choices {payload}"
+        # 旧端点的业务错误放在 base_resp 里，HTTP 状态仍是 200
+        base_resp = payload.get("base_resp") or {}
+        if base_resp.get("status_code") not in (None, 0):
+            last_error = (f"{style}: {base_resp.get('status_code')} "
+                          f"{base_resp.get('status_msg')}")
             continue
-        message = choices[0].get("message", {})
-        text = message.get("content") or ""
+
+        if style == "anthropic":
+            blocks = payload.get("content") or []
+            text = "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            usage = payload.get("usage") or {}
+        else:
+            choices = payload.get("choices") or []
+            if not choices:
+                last_error = f"{style}: 返回没有 choices（{str(payload)[:200]}）"
+                continue
+            text = (choices[0].get("message") or {}).get("content") or ""
+            usage = payload.get("usage") or {}
+
+        if not text.strip():
+            last_error = f"{style}: 返回内容为空"
+            continue
+
         return {
             "text": text,
-            "usage": payload.get("usage", {}),
+            "usage": usage,
             "raw": payload,
             "style": style,
             "elapsed_ms": round((time.time() - started) * 1000, 1),
             "url": url,
         }
+
     raise RuntimeError(f"MiniMax 调用失败：{last_error}")
 
 
@@ -178,8 +222,7 @@ def apply_patch(project_dir: str, patch_text: str) -> Tuple[bool, str]:
     with open(patch_file, "w", encoding="utf-8") as fh:
         fh.write(patch_text)
     try:
-        for cmd in (["patch", "-p1", "--forward", "--batch", "-i", ".sdd_patch.diff"],
-                    ["git", "apply", "-p1", "--whitespace=nowarn", ".sdd_patch.diff"]):
+        for cmd in (["patch", "-p1", "--forward", "--batch", "-i", ".sdd_patch.diff"],):
             try:
                 proc = subprocess.run(cmd, cwd=project_dir, capture_output=True, text=True)
             except FileNotFoundError:
@@ -201,12 +244,21 @@ def log_record(path: str, record: Dict[str, Any]) -> None:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def _snapshot(project_dir: str, files: List[str]) -> Dict[str, str]:
+def _snapshot(project_dir: str) -> Dict[str, str]:
+    """快照 ordersvc/ 下全部 Python 文件。
+
+    不按补丁里声明的路径取快照：模型偶尔会把 ---/+++ 头写坏，声明路径是垃圾值，
+    按声明取快照会漏掉真正被改的文件，回滚时留下脏数据。
+    """
     snap: Dict[str, str] = {}
-    for rel in files:
-        path = os.path.join(project_dir, rel)
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8") as fh:
+    root = os.path.join(project_dir, "ordersvc")
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for name in filenames:
+            if not name.endswith(".py"):
+                continue
+            full = os.path.join(dirpath, name)
+            rel = os.path.relpath(full, project_dir)
+            with open(full, encoding="utf-8") as fh:
                 snap[rel] = fh.read()
     return snap
 
@@ -319,8 +371,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"[patch] 已保存到 {args.out_patch}")
             return 0
 
-        from sdd_context.patchutil import changed_files
-        snap = _snapshot(args.project, changed_files(patch) or ["ordersvc/service.py"])
+        snap = _snapshot(args.project)
 
         ok, message = apply_patch(args.project, patch)
         record["applied"] = ok
@@ -333,8 +384,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             log_record(log_path, record)
             print(f"[patch] 应用失败: {message[:200]}")
             feedback = ("上一轮补丁应用失败：" + message[:400] +
-                        "\n请严格按照下面的当前代码原文重新生成补丁，"
-                        "上下文行必须逐字符一致。")
+                        "\n请重新输出完整的 unified diff：文件头必须是\n"
+                        "--- a/ordersvc/service.py\n+++ b/ordersvc/service.py\n"
+                        "不要写省略号、不要省略文件路径；上下文行必须与给出的当前代码逐字符一致。")
             continue
 
         print(f"[patch] 应用成功: {message[:200]}")

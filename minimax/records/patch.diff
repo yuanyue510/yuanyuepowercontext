@@ -1,0 +1,58 @@
+diff --git a/ordersvc/service.py b/ordersvc/service.py
+--- a/ordersvc/service.py
++++ b/ordersvc/service.py
+@@ -26,16 +26,24 @@ class OrderService:
+     def list_orders(
+         self,
+         customer_id: Optional[str] = None,
+         status: Optional[str] = None,
+         min_amount: Optional[Decimal] = None,
+     ) -> List[Order]:
+         """按条件列出订单。
+ 
+         customer_id: 精确匹配客户。
+-        status:      订单状态筛选，尚未实现（ORDER-REQ-004）。
+-        min_amount:  金额下限筛选，尚未实现（ORDER-REQ-005）。
++        status:      订单状态筛选，支持逗号分隔的多值（ORDER-REQ-004）。
++        min_amount:  金额下限筛选，包含下界（ORDER-REQ-005）。
+         """
+         orders: Sequence[Order] = self.repository.all()
+         if customer_id is not None:
+             orders = [order for order in orders if order.customer_id == customer_id]
++        if status is not None:
++            valid_statuses = {"created", "paid", "shipped", "cancelled"}
++            requested_statuses = {value.strip() for value in status.split(",")}
++            if not requested_statuses or not requested_statuses.issubset(valid_statuses):
++                raise ValueError(f"unknown order status: {status}")
++            orders = [order for order in orders if order.status in requested_statuses]
++        if min_amount is not None:
++            orders = [order for order in orders if order.amount >= min_amount]
+         return list(orders)
+@@ -47,12 +55,12 @@ class OrderService:
+     def total_cents(self, order_ids: Iterable[str]) -> int:
+         """汇总给定订单的金额，返回整数分。
+ 
+         已取消订单不计入（ORDER-REQ-008）。
+         """
+-        total = 0.0
++        total = Decimal("0")
+         for order_id in order_ids:
+             order = self.repository.get(order_id)
+             if order.status == "cancelled":
+                 continue
+-            total += float(order.amount)
++            total += order.amount
+         return int(total * 100)
+@@ -61,10 +69,12 @@ class OrderService:
+     def refund(self, order_id: str) -> Order:
+         """整单退款。仅 paid / shipped 可退，退款后置为 cancelled。"""
+         order = self.repository.get(order_id)
+         if order.status == "cancelled":
+             raise ValueError(f"order already cancelled: {order_id}")
+         if order.status == "created":
+             raise ValueError(f"unpaid order cannot be refunded: {order_id}")
++        if order.status not in ("paid", "shipped"):
++            raise ValueError(f"order cannot be refunded: {order_id}")
+         refunded = replace(order, status="cancelled")
+         self.repository.save(refunded)
+         return refunded

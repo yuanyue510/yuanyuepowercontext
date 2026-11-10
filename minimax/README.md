@@ -62,7 +62,8 @@ bash scripts/state_reuse_demo.sh      # 单独演示：状态写入 → 服务�
 
 完整依赖、配置项与已知限制见 [docs/RUNBOOK.md](docs/RUNBOOK.md)；
 模块结构、选择算法与技术分工见 [docs/DESIGN.md](docs/DESIGN.md)；
-验证样例（任务、必含来源、预期结果、重置方法）见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
+验证样例（任务、必含来源、预期结果、重置方法）见 [docs/VERIFICATION.md](docs/VERIFICATION.md)；
+MiniMax / seekdb / PowerContext 的实测调用留痕见 [docs/TECH_USAGE.md](docs/TECH_USAGE.md)。
 
 ## 验收对照
 

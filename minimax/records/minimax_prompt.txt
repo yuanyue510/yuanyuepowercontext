@@ -1,0 +1,345 @@
+# 开发任务
+为订单查询增加状态过滤与最低金额过滤，并修复金额汇总的浮点误差
+
+# 必须遵守的规格（来自 seekdb，含来源行号）
+
+## [ORDER-REQ-005] 按最低金额过滤
+来源: specs/order-query.md:49
+
+`list_orders(min_amount=...)` 必须筛出金额 **大于等于** `min_amount` 的订单（闭区间下界）。
+比较必须使用 `Decimal`，不得先转成 `float` 再比较。
+`min_amount=None` 表示不限制金额；与 `customer_id`、`status` 同时出现时取交集。
+
+## [ORDER-REQ-007] 金额汇总精度
+来源: specs/money.md:3
+
+`total_cents(order_ids)` 汇总给定订单金额并返回**整数分**。
+
+1. 累加过程必须使用 `Decimal`，禁止用 `float` 累加后再乘 100 取整；
+2. 结果必须是精确到分的整数，例如 19.99 + 0.01 必须得到 2000 分，而不是 1999 分；
+3. 空列表返回 0；
+4. 该函数只做汇总，不修改任何订单状态。
+
+## [ORDER-REQ-008] 已取消订单不计入合计
+来源: specs/money.md:16
+
+`total_cents` 必须跳过状态为 `cancelled` 的订单。
+该规则对退款后的订单同样生效：订单退款后再次汇总时不得计入其金额。
+
+## [ORDER-REQ-004] 订单状态过滤
+来源: specs/order-query.md:34
+
+`list_orders(status=...)` 必须按订单状态筛选：
+
+1. `status` 支持单值，如 `status="paid"`；
+2. `status` 支持逗号分隔的多值，如 `status="created,cancelled"`，多值之间取并集；
+3. 多值两侧的空白需要忽略，如 `status="paid, shipped"`；
+4. 出现任何不在 `created` / `paid` / `shipped` / `cancelled` 中的取值时，必须抛出
+   `ValueError`，不得静默忽略；
+5. `status=None` 表示不按状态限制。
+
+## [ORDER-REQ-003] 单条查询与退款
+来源: specs/order-query.md:24
+
+`get_order(order_id)` 返回对应订单，订单不存在时抛 `KeyError`。
+`refund(order_id)` 仅允许 `paid` / `shipped` 状态整单退款，退款后状态置为 `cancelled`；
+对 `created`（未支付）或 `cancelled`（已退款）状态调用必须抛 `ValueError`。
+
+# 需要修改的代码（当前版本，按文件+符号给出）
+
+## 文件 ordersvc/service.py 符号 OrderService.list_orders (第 26-41 行)
+```python
+    def list_orders(
+        self,
+        customer_id: Optional[str] = None,
+        status: Optional[str] = None,
+        min_amount: Optional[Decimal] = None,
+    ) -> List[Order]:
+        """按条件列出订单。
+
+        customer_id: 精确匹配客户。
+        status:      订单状态筛选，尚未实现（ORDER-REQ-004）。
+        min_amount:  金额下限筛选，尚未实现（ORDER-REQ-005）。
+        """
+        orders: Sequence[Order] = self.repository.all()
+        if customer_id is not None:
+            orders = [order for order in orders if order.customer_id == customer_id]
+        return list(orders)
+```
+
+## 文件 ordersvc/service.py 符号 OrderService.get_order (第 43-44 行)
+```python
+    def get_order(self, order_id: str) -> Order:
+        return self.repository.get(order_id)
+```
+
+## 文件 ordersvc/service.py 符号 OrderService.total_cents (第 47-58 行)
+```python
+    def total_cents(self, order_ids: Iterable[str]) -> int:
+        """汇总给定订单的金额，返回整数分。
+
+        已取消订单不计入（ORDER-REQ-008）。
+        """
+        total = 0.0
+        for order_id in order_ids:
+            order = self.repository.get(order_id)
+            if order.status == "cancelled":
+                continue
+            total += float(order.amount)
+        return int(total * 100)
+```
+
+## 文件 ordersvc/service.py 符号 OrderService.refund (第 61-70 行)
+```python
+    def refund(self, order_id: str) -> Order:
+        """整单退款。仅 paid / shipped 可退，退款后置为 cancelled。"""
+        order = self.repository.get(order_id)
+        if order.status == "cancelled":
+            raise ValueError(f"order already cancelled: {order_id}")
+        if order.status == "created":
+            raise ValueError(f"unpaid order cannot be refunded: {order_id}")
+        refunded = replace(order, status="cancelled")
+        self.repository.save(refunded)
+        return refunded
+```
+
+## 文件 ordersvc/service.py 符号 OrderService (第 21-70 行)
+```python
+class OrderService:
+    def __init__(self, repository: OrderRepository) -> None:
+        self.repository = repository
+
+    # ------------------------------------------------------------------ 查询
+    def list_orders(
+        self,
+        customer_id: Optional[str] = None,
+        status: Optional[str] = None,
+        min_amount: Optional[Decimal] = None,
+    ) -> List[Order]:
+        """按条件列出订单。
+
+        customer_id: 精确匹配客户。
+        status:      订单状态筛选，尚未实现（ORDER-REQ-004）。
+        min_amount:  金额下限筛选，尚未实现（ORDER-REQ-005）。
+        """
+        orders: Sequence[Order] = self.repository.all()
+        if customer_id is not None:
+            orders = [order for order in orders if order.customer_id == customer_id]
+        return list(orders)
+
+    def get_order(self, order_id: str) -> Order:
+        return self.repository.get(order_id)
+
+    # ------------------------------------------------------------------ 金额
+    def total_cents(self, order_ids: Iterable[str]) -> int:
+        """汇总给定订单的金额，返回整数分。
+
+        已取消订单不计入（ORDER-REQ-008）。
+        """
+        total = 0.0
+        for order_id in order_ids:
+            order = self.repository.get(order_id)
+            if order.status == "cancelled":
+                continue
+            total += float(order.amount)
+        return int(total * 100)
+
+    # ------------------------------------------------------------------ 退款
+    def refund(self, order_id: str) -> Order:
+        """整单退款。仅 paid / shipped 可退，退款后置为 cancelled。"""
+        order = self.repository.get(order_id)
+        if order.status == "cancelled":
+            raise ValueError(f"order already cancelled: {order_id}")
+        if order.status == "created":
+            raise ValueError(f"unpaid order cannot be refunded: {order_id}")
+        refunded = replace(order, status="cancelled")
+        self.repository.save(refunded)
+        return refunded
+```
+
+## 文件 ordersvc/service.py 符号 OrderService.__init__ (第 22-23 行)
+```python
+    def __init__(self, repository: OrderRepository) -> None:
+        self.repository = repository
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository (第 23-57 行)
+```python
+class OrderRepository:
+    """内存实现，接口形状与生产环境的 DB 仓储保持一致。"""
+
+    def __init__(self) -> None:
+        self._orders: Dict[str, Order] = {}
+        self.reset()
+
+    def reset(self) -> None:
+        self._orders = {
+            oid: Order(
+                order_id=oid,
+                customer_id=cid,
+                status=status,
+                amount=Decimal(amount),
+                created_at=created_at,
+            )
+            for oid, cid, status, amount, created_at in _SEED
+        }
+
+    def all(self) -> List[Order]:
+        # 保持插入顺序，列表接口的行为依赖这一点
+        return list(self._orders.values())
+
+    def get(self, order_id: str) -> Order:
+        try:
+            return self._orders[order_id]
+        except KeyError as exc:
+            raise KeyError(f"order not found: {order_id}") from exc
+
+    def save(self, order: Order) -> None:
+        self._orders[order.order_id] = order
+
+    def extend(self, orders: Iterable[Order]) -> None:
+        for order in orders:
+            self.save(order)
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.__init__ (第 26-28 行)
+```python
+    def __init__(self) -> None:
+        self._orders: Dict[str, Order] = {}
+        self.reset()
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.reset (第 30-40 行)
+```python
+    def reset(self) -> None:
+        self._orders = {
+            oid: Order(
+                order_id=oid,
+                customer_id=cid,
+                status=status,
+                amount=Decimal(amount),
+                created_at=created_at,
+            )
+            for oid, cid, status, amount, created_at in _SEED
+        }
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.all (第 42-44 行)
+```python
+    def all(self) -> List[Order]:
+        # 保持插入顺序，列表接口的行为依赖这一点
+        return list(self._orders.values())
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.get (第 46-50 行)
+```python
+    def get(self, order_id: str) -> Order:
+        try:
+            return self._orders[order_id]
+        except KeyError as exc:
+            raise KeyError(f"order not found: {order_id}") from exc
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.save (第 52-53 行)
+```python
+    def save(self, order: Order) -> None:
+        self._orders[order.order_id] = order
+```
+
+## 文件 ordersvc/repository.py 符号 OrderRepository.extend (第 55-57 行)
+```python
+    def extend(self, orders: Iterable[Order]) -> None:
+        for order in orders:
+            self.save(order)
+```
+
+# 验证测试（修改后必须通过，且不允许改动测试）
+- [target] tests/test_money_target.py::test_total_cents_no_truncation_odd_cents — ORDER-REQ-007：0.01 + 1.13 必须精确等于 114 分。
+- [target] tests/test_money_target.py::test_total_cents_no_truncation_small_amounts — ORDER-REQ-007：0.01 + 2.00 必须精确等于 201 分。
+- [target] tests/test_query_target.py::test_filter_by_min_amount_inclusive — ORDER-REQ-005：min_amount 为闭区间下界（>=）。
+- [target] tests/test_query_target.py::test_filter_by_status_multi — ORDER-REQ-004：status 支持逗号分隔多值。
+- [target] tests/test_query_target.py::test_filter_by_status_single — ORDER-REQ-004：status 单值过滤，只返回该状态的订单。
+- [target] tests/test_query_target.py::test_filter_by_status_unknown_raises — ORDER-REQ-004：非法状态值必须抛 ValueError。
+- [target] tests/test_query_target.py::test_filter_combines_customer_and_status — ORDER-REQ-004/001：条件之间取交集。
+- [target] tests/test_query_target.py::test_filter_preserves_insert_order — ORDER-REQ-006：过滤后仍需保持原有顺序。
+- [regression] tests/test_regression.py::test_filter_by_customer — ORDER-REQ-002：按客户过滤。
+- [regression] tests/test_regression.py::test_get_order_missing_raises — ORDER-REQ-003：不存在的订单抛 KeyError。
+- [regression] tests/test_regression.py::test_get_order_returns_exact_order — ORDER-REQ-003：单条查询。
+- [regression] tests/test_regression.py::test_list_all_returns_every_order — ORDER-REQ-001：无条件查询返回全部订单且保持插入顺序。
+- [regression] tests/test_regression.py::test_refund_cancelled_order_rejected — ORDER-REQ-003：重复退款被拒绝。
+- [regression] tests/test_regression.py::test_refund_paid_order_marks_cancelled — ORDER-REQ-003：已支付订单可整单退款。
+- [regression] tests/test_regression.py::test_refund_unpaid_order_rejected — ORDER-REQ-003：未支付订单不能退款。
+- [regression] tests/test_regression.py::test_total_cents_empty_orders — ORDER-REQ-007 边界：空列表合计为 0。
+- [regression] tests/test_regression.py::test_total_cents_excludes_cancelled — ORDER-REQ-008：已取消订单不计入合计。
+- [regression] tests/test_regression.py::test_total_cents_large_amounts — ORDER-REQ-007 回归：128.50 + 300.00 + 1000.00 精确等于 142850 分。
+- [regression] tests/test_regression.py::test_total_cents_round_amounts_still_exact — ORDER-REQ-007 回归：19.99 + 0.01 精确等于 2000 分。
+
+## 目标测试源码（这些断言就是验收标准）
+
+### tests/test_money_target.py::test_total_cents_no_truncation_odd_cents
+```python
+def test_total_cents_no_truncation_odd_cents(service):
+    """ORDER-REQ-007：0.01 + 1.13 必须精确等于 114 分。"""
+    assert service.total_cents(["O1002", "O1007"]) == 114
+```
+
+### tests/test_money_target.py::test_total_cents_no_truncation_small_amounts
+```python
+def test_total_cents_no_truncation_small_amounts(service):
+    """ORDER-REQ-007：0.01 + 2.00 必须精确等于 201 分。"""
+    assert service.total_cents(["O1002", "O1006"]) == 201
+```
+
+### tests/test_query_target.py::test_filter_by_min_amount_inclusive
+```python
+def test_filter_by_min_amount_inclusive(service):
+    """ORDER-REQ-005：min_amount 为闭区间下界（>=）。"""
+    orders = service.list_orders(min_amount=Decimal("128.50"))
+    assert _ids(orders) == {"O1003", "O1004", "O1008"}
+```
+
+### tests/test_query_target.py::test_filter_by_status_multi
+```python
+def test_filter_by_status_multi(service):
+    """ORDER-REQ-004：status 支持逗号分隔多值。"""
+    orders = service.list_orders(status="created,cancelled")
+    assert _ids(orders) == {"O1002", "O1005", "O1006"}
+```
+
+### tests/test_query_target.py::test_filter_by_status_single
+```python
+def test_filter_by_status_single(service):
+    """ORDER-REQ-004：status 单值过滤，只返回该状态的订单。"""
+    orders = service.list_orders(status="paid")
+    assert _ids(orders) == {"O1001", "O1004", "O1007", "O1008"}
+    assert all(order.status == "paid" for order in orders)
+```
+
+### tests/test_query_target.py::test_filter_by_status_unknown_raises
+```python
+def test_filter_by_status_unknown_raises(service):
+    """ORDER-REQ-004：非法状态值必须抛 ValueError。"""
+    import pytest
+
+    with pytest.raises(ValueError):
+        service.list_orders(status="refunded")
+```
+
+### tests/test_query_target.py::test_filter_combines_customer_and_status
+```python
+def test_filter_combines_customer_and_status(service):
+    """ORDER-REQ-004/001：条件之间取交集。"""
+    orders = service.list_orders(customer_id="C001", status="paid")
+    assert _ids(orders) == {"O1001", "O1008"}
+```
+
+### tests/test_query_target.py::test_filter_preserves_insert_order
+```python
+def test_filter_preserves_insert_order(service):
+    """ORDER-REQ-006：过滤后仍需保持原有顺序。"""
+    orders = service.list_orders(status="paid")
+    assert [order.order_id for order in orders] == ["O1001", "O1004", "O1007", "O1008"]
+```
+
+# 输出要求
+给出可直接 `patch -p1` 应用的 unified diff；路径相对样例工程根目录（例如 ordersvc/service.py）。只输出补丁本身。

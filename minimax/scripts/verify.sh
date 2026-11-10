@@ -43,6 +43,15 @@ with c.cursor() as cur:
 c.close()
 " || { bad "seekdb 连接失败"; exit 1; }
 
+# 复位样例工程：保证无论上一次跑到哪一步，本次都从"修改前"开始（可重复执行）
+if [ -f baseline/service.py ]; then
+  cp baseline/service.py sample_project/ordersvc/service.py
+  find sample_project -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+  ok "样例工程已复位到基线（baseline/service.py）"
+else
+  bad "缺少 baseline/service.py，无法保证从修改前状态开始"
+fi
+
 hdr "1/8 初始化 seekdb 结构与索引"
 $PY -m sdd_context init-db || { bad "init-db 失败"; exit 1; }
 ok "seekdb schema 就绪"
@@ -97,11 +106,19 @@ if [ "${SKIP_MINIMAX:-0}" = "1" ]; then
 fi
 
 hdr "5/8 MiniMax 依据上下文修改代码"
+# 允许把 Key 写在 .env 里，不必每次手动 export
+if [ -z "${MINIMAX_API_KEY:-}" ] && [ -f .env ]; then
+  set -a; . ./.env; set +a
+fi
 if [ -z "${MINIMAX_API_KEY:-}" ]; then
   bad "未设置 MINIMAX_API_KEY，跳过代码修改。设置后重跑即可。"
   exit 1
 fi
 # 带上 --verify-cmd：补丁应用后先自测，不通过就把报错回灌给模型重试（最多 3 次）
+# 每次运行只保留本轮记录，避免历史尝试混进证据链
+: > records/minimax_log.jsonl
+rm -f records/minimax_response*.txt records/minimax_verify_attempt*.log records/patch.diff
+
 $PY agent/minimax_patch.py --context records/context.json --project sample_project \
     --out-patch records/patch.diff --apply --max-attempts 3 \
     --verify-cmd "$PY -m pytest tests -q" || { bad "MiniMax 修改失败"; exit 1; }

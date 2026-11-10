@@ -86,9 +86,10 @@ bash scripts/verify.sh                     # 8 步全流程
 python -m sdd_context init-db
 python -m sdd_context ingest --root sample_project
 python -m sdd_context context --task "为订单查询增加状态过滤与最低金额过滤，并修复金额汇总的浮点误差" \
-       --out records/context.json
+       --out records/context.json --task-id T-ORDER-FILTER   # 带上任务号 → 输出并入已保存进展
 (cd sample_project && python -m pytest tests -q)          # 预期 8 failed / 11 passed
-python agent/minimax_patch.py --context records/context.json --apply
+python agent/minimax_patch.py --context records/context.json --apply \
+       --verify-cmd "python -m pytest tests -q"           # 应用失败或自检失败会自动重试
 (cd sample_project && python -m pytest tests -q)          # 预期 19 passed
 python -m sdd_context state-show --task-id T-ORDER-FILTER # 新进程读回状态
 ```
@@ -99,11 +100,27 @@ python -m sdd_context state-show --task-id T-ORDER-FILTER # 新进程读回状�
 | --- | --- |
 | `init-db` | `capabilities={"vector_index": true, "fulltext": "ngram"}` |
 | `ingest` | 46 个工件（8 规格 / 19 代码 / 19 测试） |
-| `context` | 5 条规格、13 个代码符号、19 条测试；含 `context_fingerprint` |
+| `context` | 5 条规格、13 个代码符号、19 条测试；含 `context_fingerprint`（本机为 `aefd4140dfa8adfa`，同输入可复现） |
 | 修改前 `pytest` | `8 failed, 11 passed`，失败全部落在 `test_query_target.py` / `test_money_target.py` |
-| MiniMax 补丁 | 只改 `ordersvc/service.py`；`git diff --name-only` 不含 `tests/` |
+| MiniMax 补丁 | 只改 `ordersvc/service.py`；测试文件哈希前后一致 |
 | 修改后 `pytest` | `19 passed` |
 | `state-show` | 打印阶段 `verified`、已完成 4 项、两次验证结果（before: rc≠0、after: rc=0） |
+
+## 6.1 实际运行结果（本机实测）
+
+`records/verify_20261110T160702.log`（退出码 0）：
+
+| 验收关注点 | 实测 | 证据 |
+| --- | --- | --- |
+| 能够运行 | `init-db` / `ingest` / `context` / 测试 / MiniMax / 状态全部通过，无手工干预 | `records/verify_*.log` |
+| MiniMax 实际参与 | MiniMax-M3，prompt 3835 tokens，completion 4880 tokens，产出 3 个 hunk | `records/minimax_log.jsonl`、`records/minimax_response.txt` |
+| 上下文正确 | 5 条规格 + 13 个代码符号 + 19 条测试，均带 `文件:行号` | `records/context.json` |
+| 数据库实际参与 | 一次 context 触发 202 条 SQL（向量检索 + ngram 全文检索 + 关系扩展） | `records/db_query_log.jsonl` |
+| 状态能够复用 | 保存后新进程读回；再构造上下文时并入「阶段/已完成/验证结果」；另有服务重启版演示 | `records/09_context_with_state.log`、`records/08_state_reuse.log` |
+| 代码修改有效 | 修改前 `8 failed, 11 passed` → 修改后 `19 passed`，测试文件哈希未变 | `records/01_before_tests.log`、`records/03_after_tests.log`、`records/00_tests_hash_*.txt` |
+
+**产物等价性校验**：把 `records/patch.diff` 应用到 `baseline/service.py` 的副本，结果与
+`records/snapshot_after_service.py` 逐字节一致——最终代码完全来自 MiniMax 的补丁，没有任何手改。
 
 ## 7. 规格变更演示（证明不是固定答案）
 
@@ -127,5 +144,9 @@ bash scripts/reset.sh           # 还原 sample_project 到修改前，清理 re
 python -m sdd_context ingest --root sample_project   # 如需清空并重建库内工件
 ```
 
-`reset.sh` 通过 `git checkout -- minimax/sample_project` 还原代码；库内工件与 PowerContext
-状态保留，重新 `ingest` / `state-save` 会覆盖。
+`reset.sh` 优先用 `git checkout -- minimax/sample_project` 还原；**环境里没有 git 时**
+（例如直接把目录拷到服务器）自动退回 `baseline/service.py` 快照还原，不依赖 VCS。
+库内工件与 PowerContext 状态保留，重新 `ingest` / `state-save` 会覆盖。
+
+`scripts/verify.sh` 自身也会在开头做一次基线复位，因此可以反复执行，每次都是
+「修改前失败 → 修改后通过」的完整对比。

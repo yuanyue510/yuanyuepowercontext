@@ -1,0 +1,18 @@
+== 1) 变更前上下文
+fingerprint: aefd4140dfa8adfa
+ORDER-REQ-005 正文首句: `list_orders(min_amount=...)` 必须筛出金额 **大于等于** `min_amount` 的订单（闭区间下界）。
+
+== 2) 修改规格：ORDER-REQ-005 由「大于等于」改为「严格大于」
+已替换规格正文
+
+== 3) 重新导入并重建上下文
+导入完成：46 个工件（规格 8 / 代码 19 / 测试 19），清理 0 个失效工件
+fingerprint before: aefd4140dfa8adfa
+fingerprint after : 335eb9cd456d8529
+revision  before: 09a9e0584c038de6c6c6dbd67a9e6596
+revision  after : 38ba77b2926774278477e3569b4f622a
+ORDER-REQ-005 正文首句 after: `list_orders(min_amount=...)` 必须筛出金额 **严格大于** `min_amount` 的订单（开区间，等于下界的订单被排除）。
+[PASS] 规格更新后，上下文使用了新内容
+
+== 4) 还原规格并重新导入
+演示结束，退出码 0

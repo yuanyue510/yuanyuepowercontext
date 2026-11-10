@@ -1,0 +1,58 @@
+==============================================================================
+任务: 为订单查询增加状态过滤与最低金额过滤，并修复金额汇总的浮点误差
+上下文指纹: aefd4140dfa8adfa   候选工件: 23   检索方式: fulltext
+==============================================================================
+
+[适用规格]
+  · ORDER-REQ-005  按最低金额过滤                                        specs/order-query.md:49  score=0.5371
+  · ORDER-REQ-007  金额汇总精度                                         specs/money.md:3  score=0.4431
+  · ORDER-REQ-008  已取消订单不计入合计                                     specs/money.md:16  score=0.3166
+  · ORDER-REQ-004  订单状态过滤                                         specs/order-query.md:34  score=0.2532
+  · ORDER-REQ-003  单条查询与退款                                        specs/order-query.md:24  score=0.2247
+
+[需要修改的代码]
+  · OrderService.list_orders               ordersvc/service.py:26-41
+  · OrderService.get_order                 ordersvc/service.py:43-44
+  · OrderService.total_cents               ordersvc/service.py:47-58
+  · OrderService.refund                    ordersvc/service.py:61-70
+  · OrderService                           ordersvc/service.py:21-70
+  · OrderService.__init__                  ordersvc/service.py:22-23
+  · OrderRepository                        ordersvc/repository.py:23-57
+  · OrderRepository.__init__               ordersvc/repository.py:26-28
+  · OrderRepository.reset                  ordersvc/repository.py:30-40
+  · OrderRepository.all                    ordersvc/repository.py:42-44
+  · OrderRepository.get                    ordersvc/repository.py:46-50
+  · OrderRepository.save                   ordersvc/repository.py:52-53
+  · OrderRepository.extend                 ordersvc/repository.py:55-57
+
+[验证测试]
+  · [target    ] tests/test_money_target.py::test_total_cents_no_truncation_odd_cents ['ORDER-REQ-007']
+  · [target    ] tests/test_money_target.py::test_total_cents_no_truncation_small_amounts ['ORDER-REQ-007']
+  · [target    ] tests/test_query_target.py::test_filter_by_min_amount_inclusive ['ORDER-REQ-005']
+  · [target    ] tests/test_query_target.py::test_filter_by_status_multi ['ORDER-REQ-004']
+  · [target    ] tests/test_query_target.py::test_filter_by_status_single ['ORDER-REQ-004']
+  · [target    ] tests/test_query_target.py::test_filter_by_status_unknown_raises ['ORDER-REQ-004']
+  · [target    ] tests/test_query_target.py::test_filter_combines_customer_and_status ['ORDER-REQ-004']
+  · [target    ] tests/test_query_target.py::test_filter_preserves_insert_order ['ORDER-REQ-006']
+  · [regression] tests/test_regression.py::test_filter_by_customer    ['ORDER-REQ-002']
+  · [regression] tests/test_regression.py::test_get_order_missing_raises ['ORDER-REQ-003']
+  · [regression] tests/test_regression.py::test_get_order_returns_exact_order ['ORDER-REQ-003']
+  · [regression] tests/test_regression.py::test_list_all_returns_every_order ['ORDER-REQ-001']
+  · [regression] tests/test_regression.py::test_refund_cancelled_order_rejected ['ORDER-REQ-003']
+  · [regression] tests/test_regression.py::test_refund_paid_order_marks_cancelled ['ORDER-REQ-003']
+  · [regression] tests/test_regression.py::test_refund_unpaid_order_rejected ['ORDER-REQ-003']
+  · [regression] tests/test_regression.py::test_total_cents_empty_orders ['ORDER-REQ-007']
+  · [regression] tests/test_regression.py::test_total_cents_excludes_cancelled ['ORDER-REQ-008']
+  · [regression] tests/test_regression.py::test_total_cents_large_amounts ['ORDER-REQ-007']
+  · [regression] tests/test_regression.py::test_total_cents_round_amounts_still_exact ['ORDER-REQ-007']
+
+[任务进展]（来自 PowerContext）
+  阶段: verified   更新时间: 2026-11-10T08:07:39.027924+00:00
+  ✓ 导入 specs/code/tests 到 seekdb
+  ✓ 构造任务上下文（规格 ORDER-REQ-004/005/007）
+  ✓ MiniMax 生成补丁并应用
+  ✓ 目标测试与回归测试全部通过
+  [FAIL] before rc=1 11 passed / 8 failed
+  [PASS] after rc=0 19 passed / 0 failed
+
+上下文已写入 records/context_with_state.json

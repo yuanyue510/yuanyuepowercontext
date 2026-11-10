@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -69,7 +70,7 @@ def cmd_context(args: argparse.Namespace, cfg: Config) -> int:
                             summary="SDD 上下文管理系统的任务状态")
             state = load_state(pc, args.task_id)
             if state is not None:
-                task_state = state.__dict__
+                task_state = asdict(state)
                 payload["task_state"] = task_state
                 payload["task_state"]["_source"] = f"powercontext:{pc.scope_id}"
         except PowerContextError as exc:

@@ -10,7 +10,8 @@ if [ -n "${PYTHON:-}" ]; then PY="$PYTHON"
 elif command -v python3 >/dev/null 2>&1; then PY=python3
 else PY=python; fi
 
-TASK_ID="${1:-T-STATE-REUSE}"
+# 默认用带时间戳的任务号：保证每次都是"空状态开始"，脚本可重复执行
+TASK_ID="${1:-T-STATE-REUSE-$(date +%Y%m%d%H%M%S)}"
 LOG=records/08_state_reuse.log
 mkdir -p records
 : > "$LOG"
