@@ -128,6 +128,7 @@ from powercontext.builtin.code.service import CodeService
 from powercontext.builtin.context import BuiltinArtifacts, BuiltinSources
 from powercontext.builtin.dream.application import DreamApplication
 from powercontext.builtin.dream.service import CandidateAttester, DreamAuthorizer, DreamService
+from powercontext.builtin.runtime.context_pack import ContextPack, ContextPackDelta, ContextPackError
 from powercontext.builtin.evidence.resolver import AuthorizationContext, ScopedEvidenceAuthorizer
 from powercontext.builtin.inference import (
     EmbeddingModel,
@@ -847,6 +848,25 @@ class ScopedContextApplication:
                 await authorize_scopes((self.scope_id, *scope.context_references))
             return await self._prepare(request, scope)
 
+    async def prepare_incremental(
+        self,
+        request: PrepareContextRequest,
+        /,
+        base_pack: ContextPack | bytes | bytearray | None = None,
+    ) -> ContextPack | ContextPackDelta:
+        """Prepare this round as a full ContextPack or as a prefix delta against one base."""
+
+        if base_pack is not None and not isinstance(base_pack, ContextPack):
+            if isinstance(base_pack, (bytes, bytearray)):
+                base_pack = ContextPack.from_bytes(bytes(base_pack))
+            else:
+                raise ContextPackError("base_pack must be a ContextPack or serialized pack bytes")
+        prepared = await self.prepare(request)
+        target = ContextPack.from_content(prepared.content or "")
+        if base_pack is None:
+            return target
+        return ContextPackDelta.between(base_pack, target)
+
     async def _prepare(self, request: PrepareContextRequest, scope: ScopeDescriptor, /) -> PreparedContext:
         build, effort = await self._prepare_build(request, scope)
         if effort is not None and self._runtime._recall_effort_sink is not None:
@@ -883,6 +903,49 @@ class ScopedContextApplication:
                 if measurement is not None:
                     await self._runtime.statistics.for_scope(self.scope_id).record_recall(measurement)
         return build.context
+
+    async def _stabilize_memory_candidates(
+        self, memory_candidates: list[PreparedMemoryCandidates], /
+    ) -> list[PreparedMemoryCandidates]:
+        """Render Memory evidence append-only for incremental context transport.
+
+        Each hit is anchored to the Memory revision that created its entry version, and hits
+        are ordered by that creation revision, so consecutive prepares keep earlier item bytes
+        unchanged and append new evidence at the tail.
+        """
+
+        stabilized: list[PreparedMemoryCandidates] = []
+        for group in memory_candidates:
+            enriched: list[tuple[int, str, int | None, MemoryHit]] = []
+            for hit in group.hits:
+                created: int | None = None
+                try:
+                    scoped = self._runtime.memory.for_scope(group.scope_id)
+                    record = await scoped.get(
+                        GetMemoryEntryRequest(
+                            citation=MemoryCitation(
+                                memory_ref=hit.memory_ref,
+                                entry_id=hit.entry_id,
+                                entry_version_id=hit.entry_version_id,
+                            )
+                        )
+                    )
+                    if record.entry is not None:
+                        created = record.entry.created_in_revision
+                except Exception:  # stabilization is best-effort; unresolvable hits keep identity
+                    created = None
+                enriched.append((created if created is not None else 1 << 60, hit.entry_id, created, hit))
+            enriched.sort(key=lambda item: (item[0], item[1]))
+            hits = tuple(
+                hit
+                if created is None or created == hit.memory_ref.revision
+                else hit.model_copy(
+                    update={"memory_ref": hit.memory_ref.model_copy(update={"revision": created})}
+                )
+                for _order, _entry_id, created, hit in enriched
+            )
+            stabilized.append(replace(group, hits=hits))
+        return stabilized
 
     async def _prepare_build(
         self,
@@ -977,6 +1040,7 @@ class ScopedContextApplication:
                 "powercontext.context.build.code_candidate_count": len(code),
             },
         ) as span:
+            memory_candidates = await self._stabilize_memory_candidates(memory_candidates)
             build = builder.build_scopes_result(
                 request=request,
                 current_scope_id=self.scope_id,
